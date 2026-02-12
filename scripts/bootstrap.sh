@@ -33,11 +33,12 @@ else
 fi
 
 python -m pip install --upgrade pip setuptools wheel
-python -m pip install -r "${RUNTIME_REQUIREMENTS_FILE}"
+python -m pip install --upgrade --force-reinstall --no-cache-dir --upgrade-strategy eager \
+  -r "${RUNTIME_REQUIREMENTS_FILE}"
 
 if [[ -n "${CONTEXT_RESEARCH_EXTRA_REQUIREMENTS:-}" ]]; then
   read -r -a EXTRA_REQUIREMENTS <<< "${CONTEXT_RESEARCH_EXTRA_REQUIREMENTS}"
-  python -m pip install "${EXTRA_REQUIREMENTS[@]}"
+  python -m pip install --upgrade --force-reinstall --no-cache-dir "${EXTRA_REQUIREMENTS[@]}"
 fi
 
 python - <<'PY'
@@ -52,8 +53,10 @@ print(f"Wrote {pth_file}")
 PY
 
 if [[ "${1:-}" == "--dev" ]]; then
-  python -m pip install -r requirements-dev.txt
+  python -m pip install --upgrade --force-reinstall --no-cache-dir -r requirements-dev.txt
 fi
+
+python -m pip check
 
 echo "Bootstrap complete."
 if [[ "${ACTIVE_ENV_LABEL}" == ".venv" ]]; then

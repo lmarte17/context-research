@@ -52,6 +52,10 @@ def _safe_int(value: Any, default: int) -> int:
         return int(value)
     if isinstance(value, int):
         return value
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped and (stripped.isdigit() or (stripped.startswith("-") and stripped[1:].isdigit())):
+            return int(stripped)
     if isinstance(value, float):
         return int(value)
     return default

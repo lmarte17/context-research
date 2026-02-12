@@ -50,3 +50,20 @@ if [ -f .venv/bin/activate ]; then source .venv/bin/activate; fi
 - `configs/experiments/e0_smoke.yaml` now requires `seed` and defaults to `42`.
 - `scripts/run_experiment.sh e0` is strict by default and fails if vLLM is unavailable.
 - Simulated backend execution is opt-in via `CONTEXT_RESEARCH_ALLOW_SIMULATED_BACKEND=1`.
+
+## 5. If You See `numpy.dtype size changed`
+
+This indicates binary mismatch between preinstalled Studio packages and runtime wheels.
+
+```bash
+git pull
+export CONTEXT_RESEARCH_USE_EXISTING_ENV=1
+./scripts/bootstrap.sh --dev
+python - <<'PY'
+import numpy
+print("numpy", numpy.__version__)
+import vllm
+print("vllm", vllm.__version__)
+PY
+./scripts/run_experiment.sh e0
+```
