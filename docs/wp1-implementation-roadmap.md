@@ -1,7 +1,18 @@
 # WP1 Implementation Roadmap (Budget-Constrained 7B-8B Track)
 
 Prepared: February 9, 2026  
+Updated: February 12, 2026  
 Scope: WP1 only (Baselines and Instrumentation)
+
+## 0. Execution Status (As of February 12, 2026)
+
+| Item | Status | Evidence / Notes |
+| :---- | :---- | :---- |
+| T1-T3 | complete | scaffold, pinned dependency path, and run metadata schema are in production use |
+| T4-T6 | complete | strict real-vLLM backend, aggregated scheduler, and disaggregated scheduler + broker are implemented |
+| E0 | complete | strict run succeeded (`run-20260212T050845Z-bdbc5aa3`) with `backend_modes.aggregated=vllm` |
+| G1 | complete | T1-T5 complete and E0 pass criteria satisfied |
+| T7-T16 | pending / in progress | downstream profiling and benchmark tracks remain to be implemented |
 
 ## 1. WP1 Objective
 
@@ -32,6 +43,7 @@ The following defaults are now selected for WP1 execution:
 - **Model policy:** pretrained-first, frozen base model (no full pretraining)
 - **Serving stack:** `vLLM` as the only backend in WP1
 - **Hardware target:** single 24GB GPU first; optional scale-up later
+- **Execution validation hardware (current):** Lightning Studio `NVIDIA L40S` (46GB)
 - **Benchmark depth:** fast fixed subsets for WP1
 - **Disaggregation timing:** aggregated baseline first, disaggregated prototype in Month 2
 - **Precision strategy:** BF16 where feasible; quantized fallback for longer contexts
@@ -75,6 +87,8 @@ WP1 and early WP2 should use pretrained models directly. This is valid for long-
 
 ## 4. Repository Structure
 
+The tree below is the WP1 target layout. The implemented subset through T1-T6 + E0 is tracked in `docs/wp1-progress-log.md`.
+
 ```text
 context-research/
   README.md
@@ -83,6 +97,7 @@ context-research/
   .env.example
   docs/
     wp1-implementation-roadmap.md
+    wp1-progress-log.md
     experiment-notes/
   src/
     context_research/
@@ -155,8 +170,11 @@ from typing import Protocol, Any
 class GenerationRequest:
     prompt: str
     max_new_tokens: int
-    temperature: float
-    top_p: float
+    temperature: float = 0.0
+    top_p: float = 1.0
+    seed: int | None = None
+    request_id: str | None = None
+    metadata: dict[str, Any] | None = None
 
 @dataclass
 class GenerationResult:
@@ -171,6 +189,7 @@ class ServingBackend(Protocol):
     def start(self) -> None: ...
     def stop(self) -> None: ...
     def warmup(self) -> None: ...
+    def prefill(self, request: GenerationRequest) -> dict[str, Any]: ...
     def generate(self, request: GenerationRequest) -> GenerationResult: ...
 ```
 
@@ -180,6 +199,7 @@ class ServingBackend(Protocol):
 class Scheduler(Protocol):
     def route_prefill(self, request: GenerationRequest) -> str: ...
     def route_decode(self, request_id: str) -> str: ...
+    def route_log(self) -> list[dict[str, Any]]: ...
 ```
 
 Implementations in WP1:
@@ -214,15 +234,15 @@ Required collectors for WP1:
 
 ## 6. Experiment Plan (Initial)
 
-| ID | Purpose | Design | Output |
-| :---- | :---- | :---- | :---- |
-| E0 | smoke and reproducibility | single model, short prompts, fixed seed | pass/fail + env manifest |
-| E1 | baseline latency scaling | aggregated serving; prompt sweep (1K, 4K, 8K, 16K, 32K) | TTFT/TPOT curves |
-| E2 | throughput and contention | batch/concurrency sweep at fixed prompt lengths | tokens/s, p95 latency, goodput |
-| E3 | aggregated vs disaggregated | same workload on both schedulers | delta TTFT/TPOT/goodput and transfer overhead |
-| E4 | capability subset | small LongBench + RULER/InfinityBench subset | quality under compute budget |
-| E5 | memory decomposition | profile peak memory across prompt lengths and modes | memory breakdown tables and plots |
-| E6 | extended-context stress | YaRN-enabled long-context subset (64K, 96K, 131K targets as feasible) | scaling behavior beyond native 32K |
+| ID | Purpose | Design | Output | Status | Notes |
+| :---- | :---- | :---- | :---- | :---- | :---- |
+| E0 | smoke and reproducibility | single model, short prompts, fixed seed | pass/fail + env manifest | complete | strict real-vLLM pass recorded in `run-20260212T050845Z-bdbc5aa3` |
+| E1 | baseline latency scaling | aggregated serving; prompt sweep (1K, 4K, 8K, 16K, 32K) | TTFT/TPOT curves | pending | depends on T7 latency collector finalization |
+| E2 | throughput and contention | batch/concurrency sweep at fixed prompt lengths | tokens/s, p95 latency, goodput | pending | depends on T7/T8 and concurrency harness |
+| E3 | aggregated vs disaggregated | same workload on both schedulers | delta TTFT/TPOT/goodput and transfer overhead | pending | depends on T9 + T13 comparison pipeline |
+| E4 | capability subset | small LongBench + RULER/InfinityBench subset | quality under compute budget | pending | benchmark harness not implemented yet |
+| E5 | memory decomposition | profile peak memory across prompt lengths and modes | memory breakdown tables and plots | pending | GPU profiling collector pending |
+| E6 | extended-context stress | YaRN-enabled long-context subset (64K, 96K, 131K targets as feasible) | scaling behavior beyond native 32K | pending | requires stable E1/E2 and long-context resource tuning |
 
 Notes:
 
@@ -232,16 +252,16 @@ Notes:
 
 ## 7. 8-Week WP1 Timeline
 
-| Week | Milestone |
-| :---- | :---- |
-| 1 | scaffold repo, config schema, backend abstraction, smoke run |
-| 2 | aggregated serving runner + TTFT/TPOT instrumentation |
-| 3 | profiling collectors + run metadata schema + report template |
-| 4 | E1/E2 completed on primary model; baseline dashboard draft |
-| 5 | disaggregated scheduler and broker prototype |
-| 6 | E3 run + KV transfer accounting; first comparison report |
-| 7 | capability subset harness (E4) and memory decomposition (E5) |
-| 8 | WP1 freeze: reproducibility pass and deliverable report |
+| Week | Milestone | Status |
+| :---- | :---- | :---- |
+| 1 | scaffold repo, config schema, backend abstraction, smoke run | complete |
+| 2 | aggregated serving runner + TTFT/TPOT instrumentation | in_progress |
+| 3 | profiling collectors + run metadata schema + report template | in_progress |
+| 4 | E1/E2 completed on primary model; baseline dashboard draft | pending |
+| 5 | disaggregated scheduler and broker prototype | complete |
+| 6 | E3 run + KV transfer accounting; first comparison report | pending |
+| 7 | capability subset harness (E4) and memory decomposition (E5) | pending |
+| 8 | WP1 freeze: reproducibility pass and deliverable report | pending |
 
 ## 8. Deliverables and Exit Criteria
 
@@ -265,9 +285,17 @@ WP1 is complete when all conditions are met:
 
 1. **Model:** `Qwen/Qwen3-8B` is the primary baseline model.
 2. **Serving backend:** `vLLM` only in WP1 for execution speed and lower integration risk.
-3. **Hardware profile:** single 24GB GPU is the required baseline target.
+3. **Hardware profile:** single-GPU baseline (24GB minimum target), with current validation on Lightning L40S 46GB.
 4. **Benchmark depth:** fixed-size subsets for LongBench/RULER/InfinityBench in WP1.
 5. **Disaggregation schedule:** implement disaggregated prototype in Month 2 after aggregated baselines are stable.
 6. **Training strategy:** pretrained/frozen-base approach for WP1-WP2; no full-model pretraining.
 7. **Context policy:** run native 32K first, then YaRN stress subset up to 131K where feasible.
 8. **Thinking mode policy:** `enable_thinking=False` for primary systems benchmarks; optional separate analysis later.
+
+## 11. Near-Term Implications (Post E0)
+
+- T7 should build directly on per-request TTFT/TPOT fields already emitted in `e0_summary.json`; missing piece is multi-request aggregation (p50/p95).
+- T8 can start from existing hardware/environment manifest and add sampled GPU telemetry over run lifetime.
+- T9 should reuse broker `transfer_bytes` and `transfer_ms` events already produced by disaggregated runs and add stall-ratio logic.
+- T12 is partially complete (E0 path done); E1/E2 configs and runners are the next unlock for G2.
+- Keep strict real-backend mode as default for all systems baselines; simulated fallback should stay opt-in debug only.
