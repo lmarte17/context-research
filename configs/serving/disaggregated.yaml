@@ -1,0 +1,16 @@
+mode: disaggregated
+backend: vllm
+allow_simulated: false
+prefill_pool_name: prefill
+decode_pool_name: decode
+prefill_pool_size: 1
+decode_pool_size: 1
+broker: local_queue
+bytes_per_token: 2048
+vllm:
+  tensor_parallel_size: 1
+  gpu_memory_utilization: 0.9
+  dtype: bfloat16
+  trust_remote_code: true
+  enforce_eager: true
+  enable_thinking: false

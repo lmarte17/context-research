@@ -1,0 +1,7 @@
+model_name: Qwen/Qwen3-8B
+dtype: bfloat16
+enable_thinking: false
+context_window: 32768
+long_context:
+  yarn_enabled: true
+  target_max_context: 131072

@@ -1,0 +1,273 @@
+# WP1 Implementation Roadmap (Budget-Constrained 7B-8B Track)
+
+Prepared: February 9, 2026  
+Scope: WP1 only (Baselines and Instrumentation)
+
+## 1. WP1 Objective
+
+Build a reproducible baseline suite for long-context serving that can run on limited hardware and produce credible metrics for later WP2/WP3 comparisons.
+
+WP1 outputs:
+
+- aggregated serving baseline,
+- disaggregated serving baseline (prototype-level if needed),
+- benchmark harness (capability + systems),
+- profiling pipeline (memory/latency/goodput/KV transfer),
+- repeatable experiment configs and report generation.
+
+## 2. Budget-First Assumptions
+
+Default assumptions for low-cost setup:
+
+- 1x to 2x consumer GPUs (24GB each) or small rented equivalent.
+- 7B to 8B instruct model family only.
+- FP16/BF16 when possible; quantized inference where needed.
+- start with subset benchmarks, then scale sample counts.
+
+### 2.1 Locked Configuration (Selected)
+
+The following defaults are now selected for WP1 execution:
+
+- **Primary model:** `Qwen/Qwen3-8B`
+- **Model policy:** pretrained-first, frozen base model (no full pretraining)
+- **Serving stack:** `vLLM` as the only backend in WP1
+- **Hardware target:** single 24GB GPU first; optional scale-up later
+- **Benchmark depth:** fast fixed subsets for WP1
+- **Disaggregation timing:** aggregated baseline first, disaggregated prototype in Month 2
+- **Precision strategy:** BF16 where feasible; quantized fallback for longer contexts
+- **Context regime:** native 32K first; then targeted 131K YaRN stress subset
+- **Thinking mode:** `enable_thinking=False` for latency/system fairness in baseline runs
+
+## 3. Recommended Baseline Stack
+
+### 3.1 Serving Backend
+
+Primary recommendation:
+
+- `vLLM` for aggregated baseline + fast iteration.
+
+Disaggregated prototype recommendation:
+
+- two independent serving pools (`prefill` and `decode`) with a lightweight broker.
+- use queue-based handoff and explicit transfer accounting first; optimize later.
+
+Fallback if engineering capacity is tight:
+
+- aggregated-only in Month 1, then emulated disaggregation in Month 2.
+
+### 3.2 Candidate 7B-8B Models
+
+| Option | Pros | Tradeoffs | Suggested Use |
+| :---- | :---- | :---- | :---- |
+| Qwen3-8B (`Qwen/Qwen3-8B`) | 8B class quality, Apache-2.0, native 32K context, validated 131K with YaRN, GQA-friendly | more VRAM pressure than 7B; requires current `transformers`/serving stack | default primary baseline |
+| Qwen2.5-7B-Instruct | very efficient fallback, mature tooling | older generation vs Qwen3 | low-cost secondary |
+| Llama-3.1-8B-Instruct | strong ecosystem and comparability | license constraints, memory heavier than 7B | optional comparison model |
+| Mistral-7B-Instruct-v0.3 | lightweight, stable infra support | lower headroom on some long-context tasks | contingency fallback |
+
+### 3.3 Pretrained-First Research Strategy
+
+WP1 and early WP2 should use pretrained models directly. This is valid for long-context systems research because the research object is serving/memory/control behavior under fixed models.
+
+- **No full model pretraining required** for WP1-WP2 baselines.
+- Start with **frozen base model** and inference-time methods (paging, scheduling, compression/retention policies).
+- If needed later, train only lightweight components (router/adapters) while keeping base weights frozen.
+- Report clearly whether gains come from systems policies vs learned adaptation.
+
+## 4. Repository Structure
+
+```text
+context-research/
+  README.md
+  pyproject.toml
+  requirements.txt
+  .env.example
+  docs/
+    wp1-implementation-roadmap.md
+    experiment-notes/
+  src/
+    context_research/
+      config/
+        schema.py
+      serving/
+        backends/
+          base.py
+          vllm_backend.py
+        scheduler/
+          base.py
+          aggregated.py
+          disaggregated.py
+        broker/
+          pd_broker.py
+      profiling/
+        collectors/
+          gpu_stats.py
+          latency_stats.py
+          kv_transfer_stats.py
+        reporter.py
+      benchmarks/
+        base.py
+        pg19.py
+        longbench.py
+        ruler_subset.py
+      experiments/
+        runner.py
+        matrix.py
+      utils/
+        logging.py
+        io.py
+  configs/
+    model/
+      qwen2_5_7b.yaml
+      llama3_1_8b.yaml
+    serving/
+      aggregated.yaml
+      disaggregated.yaml
+    benchmarks/
+      wp1_smoke.yaml
+      wp1_core.yaml
+    experiments/
+      e0_smoke.yaml
+      e1_aggregated_latency.yaml
+      e2_batch_concurrency.yaml
+      e3_disaggregated_vs_aggregated.yaml
+      e4_capability_subset.yaml
+  scripts/
+    bootstrap.sh
+    run_experiment.sh
+    make_report.sh
+  data/
+    raw/
+    processed/
+  outputs/
+    runs/
+    reports/
+```
+
+## 5. Core Interfaces (WP1)
+
+### 5.1 Serving Backend Interface
+
+```python
+from dataclasses import dataclass
+from typing import Protocol, Any
+
+@dataclass
+class GenerationRequest:
+    prompt: str
+    max_new_tokens: int
+    temperature: float
+    top_p: float
+
+@dataclass
+class GenerationResult:
+    text: str
+    prompt_tokens: int
+    completion_tokens: int
+    ttft_ms: float
+    tpot_ms: float
+    metadata: dict[str, Any]
+
+class ServingBackend(Protocol):
+    def start(self) -> None: ...
+    def stop(self) -> None: ...
+    def warmup(self) -> None: ...
+    def generate(self, request: GenerationRequest) -> GenerationResult: ...
+```
+
+### 5.2 Scheduler Interface
+
+```python
+class Scheduler(Protocol):
+    def route_prefill(self, request: GenerationRequest) -> str: ...
+    def route_decode(self, request_id: str) -> str: ...
+```
+
+Implementations in WP1:
+
+- `AggregatedScheduler`: prefill and decode on same pool.
+- `DisaggregatedScheduler`: separate pools with handoff accounting.
+
+### 5.3 Benchmark Interface
+
+```python
+class BenchmarkTask(Protocol):
+    name: str
+    def load(self, split: str) -> list[dict]: ...
+    def evaluate(self, backend: ServingBackend, samples: list[dict]) -> dict: ...
+```
+
+### 5.4 Profiling Interface
+
+```python
+class MetricCollector(Protocol):
+    def start(self) -> None: ...
+    def stop(self) -> None: ...
+    def snapshot(self) -> dict: ...
+```
+
+Required collectors for WP1:
+
+- GPU memory/utilization,
+- latency (TTFT/TPOT),
+- throughput and goodput,
+- KV handoff/transfer bytes and transfer stall ratio.
+
+## 6. Experiment Plan (Initial)
+
+| ID | Purpose | Design | Output |
+| :---- | :---- | :---- | :---- |
+| E0 | smoke and reproducibility | single model, short prompts, fixed seed | pass/fail + env manifest |
+| E1 | baseline latency scaling | aggregated serving; prompt sweep (1K, 4K, 8K, 16K, 32K) | TTFT/TPOT curves |
+| E2 | throughput and contention | batch/concurrency sweep at fixed prompt lengths | tokens/s, p95 latency, goodput |
+| E3 | aggregated vs disaggregated | same workload on both schedulers | delta TTFT/TPOT/goodput and transfer overhead |
+| E4 | capability subset | small LongBench + RULER/InfinityBench subset | quality under compute budget |
+| E5 | memory decomposition | profile peak memory across prompt lengths and modes | memory breakdown tables and plots |
+| E6 | extended-context stress | YaRN-enabled long-context subset (64K, 96K, 131K targets as feasible) | scaling behavior beyond native 32K |
+
+Notes:
+
+- if 32K is not feasible, run 24K and document limitation.
+- if benchmark runtime is too high, reduce sample count but keep fixed random subset for reproducibility.
+- run systems experiments in non-thinking mode for apples-to-apples TTFT/TPOT comparisons.
+
+## 7. 8-Week WP1 Timeline
+
+| Week | Milestone |
+| :---- | :---- |
+| 1 | scaffold repo, config schema, backend abstraction, smoke run |
+| 2 | aggregated serving runner + TTFT/TPOT instrumentation |
+| 3 | profiling collectors + run metadata schema + report template |
+| 4 | E1/E2 completed on primary model; baseline dashboard draft |
+| 5 | disaggregated scheduler and broker prototype |
+| 6 | E3 run + KV transfer accounting; first comparison report |
+| 7 | capability subset harness (E4) and memory decomposition (E5) |
+| 8 | WP1 freeze: reproducibility pass and deliverable report |
+
+## 8. Deliverables and Exit Criteria
+
+WP1 is complete when all conditions are met:
+
+- one-command run for each core experiment (`E1` through `E5`),
+- repeatable metrics (<=5% variance on repeated short runs for latency),
+- aggregated and disaggregated comparison report generated,
+- outputs versioned by `run_id` with full config + hardware metadata.
+
+## 9. Risks Specific to Low-Budget Hardware
+
+| Risk | Impact | Mitigation |
+| :---- | :---- | :---- |
+| OOM at long prompts | blocks E1/E5 high-length runs | use smaller batch, quantization, reduced max length tier |
+| benchmark runtime too long | delayed iteration | fixed-size benchmark subsets for WP1 |
+| unstable latency noise | weak conclusions | warmup standardization + repeated trials + p50/p95 reporting |
+| disaggregated prototype complexity | schedule slip | stage as simple broker first, optimize in WP2 |
+
+## 10. Decision Log (Locked for WP1)
+
+1. **Model:** `Qwen/Qwen3-8B` is the primary baseline model.
+2. **Serving backend:** `vLLM` only in WP1 for execution speed and lower integration risk.
+3. **Hardware profile:** single 24GB GPU is the required baseline target.
+4. **Benchmark depth:** fixed-size subsets for LongBench/RULER/InfinityBench in WP1.
+5. **Disaggregation schedule:** implement disaggregated prototype in Month 2 after aggregated baselines are stable.
+6. **Training strategy:** pretrained/frozen-base approach for WP1-WP2; no full-model pretraining.
+7. **Context policy:** run native 32K first, then YaRN stress subset up to 131K where feasible.
+8. **Thinking mode policy:** `enable_thinking=False` for primary systems benchmarks; optional separate analysis later.

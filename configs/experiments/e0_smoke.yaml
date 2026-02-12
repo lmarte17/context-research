@@ -1,0 +1,9 @@
+name: e0_smoke
+model: Qwen/Qwen3-8B
+seed: 42
+max_prompt_tokens: 1024
+max_new_tokens: 64
+temperature: 0.0
+top_p: 1.0
+notes:
+  purpose: "sanity check for CLI and metadata logging"

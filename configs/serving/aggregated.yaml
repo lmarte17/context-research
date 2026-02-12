@@ -1,0 +1,12 @@
+mode: aggregated
+backend: vllm
+allow_simulated: false
+pool_name: aggregated
+pool_size: 1
+vllm:
+  tensor_parallel_size: 1
+  gpu_memory_utilization: 0.9
+  dtype: bfloat16
+  trust_remote_code: true
+  enforce_eager: true
+  enable_thinking: false

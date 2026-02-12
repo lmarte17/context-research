@@ -1,0 +1,6 @@
+# Runtime dependencies (pinned)
+# Install on Linux + NVIDIA CUDA hosts (for example, Lightning AI A100 runtimes).
+PyYAML==6.0.2
+huggingface-hub==0.30.2
+nvidia-ml-py==12.560.30
+vllm==0.8.5.post1

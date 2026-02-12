@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68.0.0", "wheel>=0.40.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "context-research"
+version = "0.1.0"
+description = "Long-context LLM systems research scaffolding"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "PyYAML==6.0.2",
+  "huggingface-hub==0.30.2",
+  "nvidia-ml-py==12.560.30",
+  "vllm==0.8.5.post1",
+]
+
+[project.scripts]
+context-research = "context_research.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

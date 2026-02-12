@@ -1,0 +1,7 @@
+name: wp1_core
+tasks:
+  - longbench_subset
+  - ruler_subset
+  - infinitybench_subset
+sample_count: 100
+seed: 42
