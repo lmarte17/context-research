@@ -108,4 +108,9 @@ class LocalQueuePDBroker:
         }
 
     def completed_handoffs(self) -> list[dict[str, Any]]:
-        return [asdict(record) for record in self._completed]
+        payload: list[dict[str, Any]] = []
+        for record in self._completed:
+            serialized = asdict(record)
+            serialized.pop("_enqueued_perf", None)
+            payload.append(serialized)
+        return payload

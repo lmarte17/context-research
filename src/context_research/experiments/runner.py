@@ -12,6 +12,11 @@ from typing import Any
 
 from context_research.config.io import load_simple_yaml
 from context_research.config.schema import create_run_metadata, run_metadata_to_dict, write_run_metadata
+from context_research.profiling.collectors import (
+    GPUStatsCollector,
+    KVTransferStatsCollector,
+    LatencyStatsCollector,
+)
 from context_research.serving import (
     AggregatedScheduler,
     DisaggregatedScheduler,
@@ -270,12 +275,22 @@ def run_e0(
 
     started_at = _utc_now()
     wall_start = perf_counter()
+    latency_collector = LatencyStatsCollector()
+    gpu_collector = GPUStatsCollector(
+        sample_interval_ms=_safe_int(serving_config.get("gpu_sample_interval_ms"), 100)
+    )
+    kv_transfer_collector = KVTransferStatsCollector()
+    kv_transfer_collector.set_mode(mode)
+    latency_collector.start()
+    gpu_collector.start()
+    kv_transfer_collector.start()
 
     generation_result = None
     prefill_result: dict[str, Any] | None = None
     prefill_pool = None
     decode_pool = None
     broker_snapshot: dict[str, Any] | None = None
+    broker_completed_handoffs: list[dict[str, Any]] = []
     success = False
     error_message = None
     backend_modes: dict[str, str] = {}
@@ -294,6 +309,14 @@ def run_e0(
             prefill_result = aggregated_backend.prefill(request)
             decode_pool = scheduler.route_decode(request.request_id or "")
             generation_result = aggregated_backend.generate(request)
+            latency_collector.record_sample(
+                request_id=request.request_id or "e0-smoke-req-unknown",
+                ttft_ms=generation_result.ttft_ms,
+                tpot_ms=generation_result.tpot_ms,
+                prompt_tokens=generation_result.prompt_tokens,
+                completion_tokens=generation_result.completion_tokens,
+                metadata=generation_result.metadata,
+            )
             backend_modes["aggregated"] = aggregated_backend.mode
         else:
             prefill_backend = VLLMBackend(backend_config)
@@ -307,6 +330,14 @@ def run_e0(
             prefill_result = prefill_backend.prefill(request)
             decode_pool = scheduler.route_decode(request.request_id or "")
             generation_result = decode_backend.generate(request)
+            latency_collector.record_sample(
+                request_id=request.request_id or "e0-smoke-req-unknown",
+                ttft_ms=generation_result.ttft_ms,
+                tpot_ms=generation_result.tpot_ms,
+                prompt_tokens=generation_result.prompt_tokens,
+                completion_tokens=generation_result.completion_tokens,
+                metadata=generation_result.metadata,
+            )
             backend_modes["prefill"] = prefill_backend.mode
             backend_modes["decode"] = decode_backend.mode
 
@@ -323,6 +354,9 @@ def run_e0(
             prefill_backend.stop()
         if decode_backend is not None:
             decode_backend.stop()
+        latency_collector.stop()
+        gpu_collector.stop()
+        kv_transfer_collector.stop()
 
     wall_time_ms = (perf_counter() - wall_start) * 1000.0
     finished_at = _utc_now()
@@ -330,6 +364,15 @@ def run_e0(
     route_log = scheduler.route_log()
     if isinstance(scheduler, DisaggregatedScheduler):
         broker_snapshot = scheduler.broker.snapshot()
+        broker_completed_handoffs = scheduler.broker.completed_handoffs()
+        kv_transfer_collector.ingest_completed_handoffs(broker_completed_handoffs)
+    kv_transfer_collector.set_wall_time_ms(wall_time_ms)
+
+    profiling_snapshot = {
+        "latency": latency_collector.snapshot(),
+        "gpu": gpu_collector.snapshot(),
+        "kv_transfer": kv_transfer_collector.snapshot(),
+    }
 
     checks = {
         "fixed_seed_configured": True,
@@ -363,6 +406,8 @@ def run_e0(
         "prefill_pool": prefill_pool,
         "decode_pool": decode_pool,
         "broker_snapshot": broker_snapshot,
+        "broker_completed_handoffs": broker_completed_handoffs,
+        "profiling": profiling_snapshot,
         "environment_manifest": _env_manifest(),
         "run_metadata": run_metadata_to_dict(metadata),
     }
