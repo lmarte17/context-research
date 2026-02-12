@@ -11,6 +11,7 @@ export HF_HOME=""
 export CONTEXT_RESEARCH_REQUIREMENTS_FILE="requirements.txt"
 export CONTEXT_RESEARCH_EXTRA_REQUIREMENTS=""
 export CONTEXT_RESEARCH_ALLOW_SIMULATED_BACKEND="0"
+export CONTEXT_RESEARCH_USE_EXISTING_ENV="1"
 
 export LIGHTNING_STUDIO_URL="https://lightning.ai/${LIGHTNING_ORG}/studios/${LIGHTNING_STUDIO_ID}"
 export LIGHTNING_RUN_URL="https://lightning.ai/${LIGHTNING_ORG}/jobs/${LIGHTNING_JOB_ID}"
@@ -24,6 +25,7 @@ export LIGHTNING_WORKSPACE_URL="https://lightning.ai/${LIGHTNING_ORG}/home"
 | `HF_TOKEN` | runtime environment | authorizes model pull from Hugging Face when required |
 | `CONTEXT_RESEARCH_REQUIREMENTS_FILE` | `scripts/bootstrap.sh` | selects requirements file for runtime install |
 | `CONTEXT_RESEARCH_EXTRA_REQUIREMENTS` | `scripts/bootstrap.sh` | appends extra pinned pip packages |
+| `CONTEXT_RESEARCH_USE_EXISTING_ENV` | `scripts/bootstrap.sh` | skips `.venv` creation and uses the Studio conda env |
 | `CONTEXT_RESEARCH_ALLOW_SIMULATED_BACKEND` | `scripts/run_experiment.sh` | appends `--allow-simulated-backend` to E0 command |
 | `HF_HOME` | `src/context_research/experiments/runner.py` | stored in E0 `environment_manifest.hf_home` |
 | `LIGHTNING_STUDIO_URL` | `src/context_research/experiments/runner.py` | stored in E0 `environment_manifest.lightning_env` |
@@ -34,7 +36,8 @@ export LIGHTNING_WORKSPACE_URL="https://lightning.ai/${LIGHTNING_ORG}/home"
 
 ```bash
 ./scripts/bootstrap.sh --dev
-source .venv/bin/activate
+# Activate .venv only if bootstrap created one (Studio usually will not).
+if [ -f .venv/bin/activate ]; then source .venv/bin/activate; fi
 
 ./scripts/run_experiment.sh e0
 ./scripts/run_experiment.sh e0 --serving-config configs/serving/disaggregated.yaml

@@ -5,9 +5,32 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT_DIR}"
 
 RUNTIME_REQUIREMENTS_FILE="${CONTEXT_RESEARCH_REQUIREMENTS_FILE:-requirements.txt}"
+USE_EXISTING_ENV="${CONTEXT_RESEARCH_USE_EXISTING_ENV:-0}"
+ACTIVE_ENV_LABEL="system"
 
-python3 -m venv .venv
-source .venv/bin/activate
+if [[ "${USE_EXISTING_ENV}" == "1" || "${USE_EXISTING_ENV}" == "true" ]]; then
+  echo "Using existing Python environment (CONTEXT_RESEARCH_USE_EXISTING_ENV=${USE_EXISTING_ENV})."
+elif [[ -f ".venv/bin/activate" ]]; then
+  # Reuse previously created virtual environment when available.
+  source .venv/bin/activate
+  ACTIVE_ENV_LABEL=".venv"
+else
+  VENV_ERR_FILE="$(mktemp)"
+  if python3 -m venv .venv 2>"${VENV_ERR_FILE}"; then
+    source .venv/bin/activate
+    ACTIVE_ENV_LABEL=".venv"
+  else
+    if grep -q "Venv creation is not allowed" "${VENV_ERR_FILE}"; then
+      echo "Venv creation is blocked in this environment; continuing with existing Python environment."
+      ACTIVE_ENV_LABEL="system"
+    else
+      cat "${VENV_ERR_FILE}" >&2
+      rm -f "${VENV_ERR_FILE}"
+      exit 1
+    fi
+  fi
+  rm -f "${VENV_ERR_FILE}"
+fi
 
 python -m pip install --upgrade pip setuptools wheel
 python -m pip install -r "${RUNTIME_REQUIREMENTS_FILE}"
@@ -33,4 +56,8 @@ if [[ "${1:-}" == "--dev" ]]; then
 fi
 
 echo "Bootstrap complete."
-echo "Activate with: source .venv/bin/activate"
+if [[ "${ACTIVE_ENV_LABEL}" == ".venv" ]]; then
+  echo "Activate with: source .venv/bin/activate"
+else
+  echo "Using existing environment; no .venv activation required."
+fi

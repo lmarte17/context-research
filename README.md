@@ -22,7 +22,8 @@ source .env
 set +a
 
 ./scripts/bootstrap.sh --dev
-source .venv/bin/activate
+# If bootstrap created .venv, activate it:
+if [ -f .venv/bin/activate ]; then source .venv/bin/activate; fi
 
 ./scripts/run_experiment.sh e0
 ./scripts/run_experiment.sh e0 --serving-config configs/serving/disaggregated.yaml
@@ -61,6 +62,7 @@ All fillers are env vars. No non-env placeholders are required.
 | `HF_HOME` | Hugging Face cache location | `src/context_research/experiments/runner.py` (`environment_manifest.hf_home`) |
 | `CONTEXT_RESEARCH_REQUIREMENTS_FILE` | alternate requirements file for bootstrap | `scripts/bootstrap.sh` |
 | `CONTEXT_RESEARCH_EXTRA_REQUIREMENTS` | extra pip requirements for host-specific overrides | `scripts/bootstrap.sh` |
+| `CONTEXT_RESEARCH_USE_EXISTING_ENV` | force bootstrap to skip `.venv` creation | `scripts/bootstrap.sh` |
 | `CONTEXT_RESEARCH_ALLOW_SIMULATED_BACKEND` | opt-in simulated fallback for E0 CLI wrapper | `scripts/run_experiment.sh` |
 | `LIGHTNING_STUDIO_URL` | Lightning studio URL (for run traceability) | `src/context_research/experiments/runner.py` (`environment_manifest.lightning_env`) |
 | `LIGHTNING_RUN_URL` | Lightning run/job URL | `src/context_research/experiments/runner.py` (`environment_manifest.lightning_env`) |
