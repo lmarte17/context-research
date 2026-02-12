@@ -14,3 +14,10 @@ vllm:
   trust_remote_code: true
   enforce_eager: true
   enable_thinking: false
+
+# Optional manual GPU assignment overrides for multi-GPU runs.
+# If omitted, E0 auto-assigns non-overlapping devices when possible.
+# prefill_visible_devices: "0"
+# decode_visible_devices: "1"
+# prefill_device: "cuda:0"
+# decode_device: "cuda:0"

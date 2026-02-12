@@ -131,6 +131,111 @@ def _collect_nvidia_manifest() -> dict[str, Any]:
     return {"available": True, "gpus": gpus}
 
 
+def _discover_gpu_indices() -> list[int]:
+    command = [
+        "nvidia-smi",
+        "--query-gpu=index",
+        "--format=csv,noheader,nounits",
+    ]
+    try:
+        result = subprocess.run(command, check=True, capture_output=True, text=True)
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return []
+
+    indices: list[int] = []
+    for raw_line in result.stdout.strip().splitlines():
+        parsed = _safe_int(raw_line.strip(), -1)
+        if parsed >= 0:
+            indices.append(parsed)
+    return sorted(indices)
+
+
+def _parse_visible_devices(value: Any) -> str | None:
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped:
+            return stripped
+        return None
+
+    if isinstance(value, list):
+        parsed: list[str] = []
+        for item in value:
+            index = _safe_int(item, -1)
+            if index >= 0:
+                parsed.append(str(index))
+        if parsed:
+            return ",".join(parsed)
+    return None
+
+
+def _visible_devices_from_indices(indices: list[int]) -> str | None:
+    if not indices:
+        return None
+    return ",".join(str(index) for index in indices)
+
+
+def _resolve_disaggregated_gpu_assignment(serving_config: dict[str, Any]) -> dict[str, Any]:
+    vllm_config = _as_mapping(serving_config.get("vllm"), "vllm")
+    tensor_parallel_size = max(1, _safe_int(vllm_config.get("tensor_parallel_size"), 1))
+    available_indices = _discover_gpu_indices()
+
+    prefill_override = _parse_visible_devices(serving_config.get("prefill_visible_devices"))
+    decode_override = _parse_visible_devices(serving_config.get("decode_visible_devices"))
+
+    assignment: dict[str, Any] = {
+        "strategy": "auto",
+        "tensor_parallel_size": tensor_parallel_size,
+        "available_gpu_indices": available_indices,
+        "prefill_visible_devices": prefill_override,
+        "decode_visible_devices": decode_override,
+        "warning": None,
+    }
+
+    if prefill_override or decode_override:
+        assignment["strategy"] = "manual_override"
+        if not prefill_override or not decode_override:
+            assignment["warning"] = (
+                "Manual GPU override was partial; one backend has no explicit visible-device assignment."
+            )
+        return assignment
+
+    if len(available_indices) < 2:
+        assignment["strategy"] = "single_or_unknown_gpu"
+        assignment["warning"] = (
+            "Auto GPU assignment requires at least 2 visible GPUs. "
+            "Disaggregated backends will use default placement."
+        )
+        return assignment
+
+    required_for_isolation = tensor_parallel_size * 2
+    if len(available_indices) >= required_for_isolation:
+        prefill_indices = available_indices[:tensor_parallel_size]
+        decode_indices = available_indices[tensor_parallel_size:required_for_isolation]
+        assignment["strategy"] = "auto_non_overlapping"
+        assignment["prefill_visible_devices"] = _visible_devices_from_indices(prefill_indices)
+        assignment["decode_visible_devices"] = _visible_devices_from_indices(decode_indices)
+        return assignment
+
+    if len(available_indices) >= tensor_parallel_size:
+        shared_indices = available_indices[:tensor_parallel_size]
+        shared_visible = _visible_devices_from_indices(shared_indices)
+        assignment["strategy"] = "auto_shared_due_to_insufficient_gpus"
+        assignment["prefill_visible_devices"] = shared_visible
+        assignment["decode_visible_devices"] = shared_visible
+        assignment["warning"] = (
+            f"Only {len(available_indices)} GPUs visible for tensor_parallel_size={tensor_parallel_size}. "
+            "Prefill/decode will share GPUs."
+        )
+        return assignment
+
+    assignment["strategy"] = "insufficient_for_tensor_parallel"
+    assignment["warning"] = (
+        f"Visible GPUs ({len(available_indices)}) are below tensor_parallel_size "
+        f"({tensor_parallel_size}). Falling back to default placement."
+    )
+    return assignment
+
+
 def _env_manifest() -> dict[str, Any]:
     lightning_keys = [
         "LIGHTNING_STUDIO_URL",
@@ -156,6 +261,8 @@ def _build_vllm_backend_config(
     serving_config: dict[str, Any],
     max_model_len: int,
     allow_simulated_backend: bool,
+    visible_devices: str | None = None,
+    device: str | None = None,
 ) -> VLLMBackendConfig:
     vllm_config = _as_mapping(serving_config.get("vllm"), "vllm")
     return VLLMBackendConfig(
@@ -168,6 +275,8 @@ def _build_vllm_backend_config(
         enforce_eager=_safe_bool(vllm_config.get("enforce_eager"), True),
         enable_thinking=_safe_bool(vllm_config.get("enable_thinking"), False),
         simulate_if_unavailable=allow_simulated_backend,
+        visible_devices=visible_devices,
+        device=device,
     )
 
 
@@ -249,19 +358,48 @@ def run_e0(
         },
     )
 
-    backend_config = _build_vllm_backend_config(
-        model_name=model_name,
-        serving_config=serving_config,
-        max_model_len=max_prompt_tokens + max_new_tokens,
-        allow_simulated_backend=allow_simulated_backend,
-    )
-
+    gpu_assignment: dict[str, Any] = {
+        "strategy": "not_applicable",
+        "warning": None,
+        "tensor_parallel_size": None,
+        "available_gpu_indices": [],
+        "prefill_visible_devices": None,
+        "decode_visible_devices": None,
+    }
+    aggregated_backend_config: VLLMBackendConfig | None = None
+    prefill_backend_config: VLLMBackendConfig | None = None
+    decode_backend_config: VLLMBackendConfig | None = None
     if mode == "aggregated":
+        aggregated_backend_config = _build_vllm_backend_config(
+            model_name=model_name,
+            serving_config=serving_config,
+            max_model_len=max_prompt_tokens + max_new_tokens,
+            allow_simulated_backend=allow_simulated_backend,
+            visible_devices=_parse_visible_devices(serving_config.get("visible_devices")),
+            device=_safe_optional_str(serving_config.get("device")),
+        )
         scheduler: AggregatedScheduler | DisaggregatedScheduler = AggregatedScheduler(
             pool_name=_safe_str(serving_config.get("pool_name"), "aggregated"),
             pool_size=_safe_int(serving_config.get("pool_size"), 1),
         )
     else:
+        gpu_assignment = _resolve_disaggregated_gpu_assignment(serving_config)
+        prefill_backend_config = _build_vllm_backend_config(
+            model_name=model_name,
+            serving_config=serving_config,
+            max_model_len=max_prompt_tokens + max_new_tokens,
+            allow_simulated_backend=allow_simulated_backend,
+            visible_devices=_safe_optional_str(gpu_assignment.get("prefill_visible_devices")),
+            device=_safe_optional_str(serving_config.get("prefill_device")),
+        )
+        decode_backend_config = _build_vllm_backend_config(
+            model_name=model_name,
+            serving_config=serving_config,
+            max_model_len=max_prompt_tokens + max_new_tokens,
+            allow_simulated_backend=allow_simulated_backend,
+            visible_devices=_safe_optional_str(gpu_assignment.get("decode_visible_devices")),
+            device=_safe_optional_str(serving_config.get("decode_device")),
+        )
         broker = LocalQueuePDBroker(
             bytes_per_token=_safe_int(serving_config.get("bytes_per_token"), 2048)
         )
@@ -301,7 +439,9 @@ def run_e0(
 
     try:
         if mode == "aggregated":
-            aggregated_backend = VLLMBackend(backend_config)
+            if aggregated_backend_config is None:
+                raise RuntimeError("Missing aggregated backend config.")
+            aggregated_backend = VLLMBackend(aggregated_backend_config)
             aggregated_backend.start()
             if warmup:
                 aggregated_backend.warmup()
@@ -319,8 +459,10 @@ def run_e0(
             )
             backend_modes["aggregated"] = aggregated_backend.mode
         else:
-            prefill_backend = VLLMBackend(backend_config)
-            decode_backend = VLLMBackend(backend_config)
+            if prefill_backend_config is None or decode_backend_config is None:
+                raise RuntimeError("Missing disaggregated backend configs.")
+            prefill_backend = VLLMBackend(prefill_backend_config)
+            decode_backend = VLLMBackend(decode_backend_config)
             prefill_backend.start()
             decode_backend.start()
             if warmup:
@@ -405,6 +547,7 @@ def run_e0(
         "route_log": route_log,
         "prefill_pool": prefill_pool,
         "decode_pool": decode_pool,
+        "gpu_assignment": gpu_assignment,
         "broker_snapshot": broker_snapshot,
         "broker_completed_handoffs": broker_completed_handoffs,
         "profiling": profiling_snapshot,

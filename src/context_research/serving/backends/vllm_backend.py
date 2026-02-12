@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 import inspect
 import math
+import os
 from time import perf_counter
 from typing import Any
 
@@ -35,6 +37,8 @@ class VLLMBackendConfig:
     simulate_if_unavailable: bool = False
     simulated_ttft_ms: float = 20.0
     simulated_tpot_ms: float = 1.5
+    visible_devices: str | None = None
+    device: str | None = None
 
 
 class VLLMBackend(ServingBackend):
@@ -54,39 +58,42 @@ class VLLMBackend(ServingBackend):
         if self._started:
             return
 
-        try:
-            from vllm import LLM, SamplingParams  # type: ignore
-        except ImportError:
-            if not self._config.simulate_if_unavailable:
-                raise RuntimeError(
-                    "vLLM is not installed and simulate_if_unavailable=False."
-                ) from None
-            self._mode = "simulated"
+        with _temporary_cuda_visible_devices(self._config.visible_devices):
+            try:
+                from vllm import LLM, SamplingParams  # type: ignore
+            except ImportError:
+                if not self._config.simulate_if_unavailable:
+                    raise RuntimeError(
+                        "vLLM is not installed and simulate_if_unavailable=False."
+                    ) from None
+                self._mode = "simulated"
+                self._started = True
+                return
+
+            kwargs: dict[str, Any] = {
+                "model": self._config.model,
+                "tensor_parallel_size": self._config.tensor_parallel_size,
+                "gpu_memory_utilization": self._config.gpu_memory_utilization,
+                "trust_remote_code": self._config.trust_remote_code,
+                "enforce_eager": self._config.enforce_eager,
+                "enable_thinking": self._config.enable_thinking,
+            }
+            if self._config.max_model_len is not None:
+                kwargs["max_model_len"] = self._config.max_model_len
+            if self._config.dtype is not None:
+                kwargs["dtype"] = self._config.dtype
+            if self._config.device is not None:
+                kwargs["device"] = self._config.device
+
+            init_params = set(inspect.signature(LLM.__init__).parameters.keys())
+            init_params.discard("self")
+            filtered_kwargs = {k: v for k, v in kwargs.items() if k in init_params}
+
+            self._llm = LLM(**filtered_kwargs)
+            self._sampling_params_cls = SamplingParams
+            self._tokenizer = self._maybe_get_tokenizer()
+            self._mode = "vllm"
             self._started = True
-            return
-
-        kwargs: dict[str, Any] = {
-            "model": self._config.model,
-            "tensor_parallel_size": self._config.tensor_parallel_size,
-            "gpu_memory_utilization": self._config.gpu_memory_utilization,
-            "trust_remote_code": self._config.trust_remote_code,
-            "enforce_eager": self._config.enforce_eager,
-            "enable_thinking": self._config.enable_thinking,
-        }
-        if self._config.max_model_len is not None:
-            kwargs["max_model_len"] = self._config.max_model_len
-        if self._config.dtype is not None:
-            kwargs["dtype"] = self._config.dtype
-
-        init_params = set(inspect.signature(LLM.__init__).parameters.keys())
-        init_params.discard("self")
-        filtered_kwargs = {k: v for k, v in kwargs.items() if k in init_params}
-
-        self._llm = LLM(**filtered_kwargs)
-        self._sampling_params_cls = SamplingParams
-        self._tokenizer = self._maybe_get_tokenizer()
-        self._mode = "vllm"
-        self._started = True
 
     def stop(self) -> None:
         self._llm = None
@@ -154,6 +161,7 @@ class VLLMBackend(ServingBackend):
                 "requested_max_new_tokens": request.max_new_tokens,
                 "latency_source": "simulated",
                 "seed": request.seed,
+                "visible_devices": self._config.visible_devices,
             },
         )
 
@@ -190,6 +198,7 @@ class VLLMBackend(ServingBackend):
                 "elapsed_ms": elapsed_ms,
                 "latency_source": latency_source,
                 "seed": request.seed,
+                "visible_devices": self._config.visible_devices,
             },
         )
 
@@ -294,3 +303,21 @@ class VLLMBackend(ServingBackend):
                 tpot_ms = residual_ms / float(completion_tokens - 1)
 
         return (ttft_ms, tpot_ms, latency_source)
+
+
+@contextmanager
+def _temporary_cuda_visible_devices(visible_devices: str | None):
+    if not visible_devices:
+        yield
+        return
+
+    key = "CUDA_VISIBLE_DEVICES"
+    previous = os.environ.get(key)
+    os.environ[key] = visible_devices
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = previous

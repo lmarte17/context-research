@@ -55,6 +55,7 @@ def build_run_markdown_report(payload: dict[str, Any], summary_path: str | Path)
     checks = payload.get("checks") or {}
     backend_modes = payload.get("backend_modes") or {}
     profiling = payload.get("profiling") or {}
+    gpu_assignment = _as_dict(payload.get("gpu_assignment"))
 
     latency_summary = _as_dict(_as_dict(profiling.get("latency")).get("summary"))
     ttft_summary = _as_dict(latency_summary.get("ttft_ms"))
@@ -81,6 +82,15 @@ def build_run_markdown_report(payload: dict[str, Any], summary_path: str | Path)
         f"- Started (UTC): `{started_at}`",
         f"- Finished (UTC): `{finished_at}`",
         f"- Wall time (ms): `{_fmt_float(wall_time_ms)}`",
+        "",
+        "## GPU Assignment",
+        "",
+        f"- Strategy: `{_fmt_text(gpu_assignment.get('strategy'))}`",
+        f"- Tensor parallel size: `{_fmt_int(gpu_assignment.get('tensor_parallel_size'))}`",
+        f"- Available GPUs: `{gpu_assignment.get('available_gpu_indices')}`",
+        f"- Prefill visible devices: `{_fmt_text(gpu_assignment.get('prefill_visible_devices'))}`",
+        f"- Decode visible devices: `{_fmt_text(gpu_assignment.get('decode_visible_devices'))}`",
+        f"- Warning: `{_fmt_text(gpu_assignment.get('warning'))}`",
         "",
         "## Request Latency",
         "",
