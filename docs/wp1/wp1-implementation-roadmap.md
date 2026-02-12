@@ -10,9 +10,11 @@ Scope: WP1 only (Baselines and Instrumentation)
 | :---- | :---- | :---- |
 | T1-T3 | complete | scaffold, pinned dependency path, and run metadata schema are in production use |
 | T4-T6 | complete | strict real-vLLM backend, aggregated scheduler, and disaggregated scheduler + broker are implemented |
+| T7-T10 | complete | latency/GPU/KV transfer collectors and generalized reporting are implemented and wired into E0 artifacts |
 | E0 | complete | strict run succeeded (`run-20260212T050845Z-bdbc5aa3`) with `backend_modes.aggregated=vllm` |
 | G1 | complete | T1-T5 complete and E0 pass criteria satisfied |
-| T7-T16 | pending / in progress | downstream profiling and benchmark tracks remain to be implemented |
+| G2 | in progress | collector/report prerequisites satisfied; pending E1/E2 execution and plot generation |
+| T11-T16 | pending / in progress | benchmark harness and downstream experiment tracks remain to be implemented |
 
 ## 1. WP1 Objective
 
@@ -46,6 +48,7 @@ The following defaults are now selected for WP1 execution:
 - **Execution validation hardware (current):** Lightning Studio `NVIDIA L40S` (46GB)
 - **Benchmark depth:** fast fixed subsets for WP1
 - **Disaggregation timing:** aggregated baseline first, disaggregated prototype in Month 2
+- **Disaggregated execution policy:** real 8B disaggregated runs are multi-GPU; single-GPU uses aggregated real runs or simulated disaggregated checks
 - **Precision strategy:** BF16 where feasible; quantized fallback for longer contexts
 - **Context regime:** native 32K first; then targeted 131K YaRN stress subset
 - **Thinking mode:** `enable_thinking=False` for latency/system fairness in baseline runs
@@ -87,7 +90,7 @@ WP1 and early WP2 should use pretrained models directly. This is valid for long-
 
 ## 4. Repository Structure
 
-The tree below is the WP1 target layout. The implemented subset through T1-T6 + E0 is tracked in `docs/wp1-progress-log.md`.
+The tree below is the WP1 target layout. The implemented subset through T1-T10 + E0 is tracked in `docs/wp1/wp1-progress-log.md`.
 
 ```text
 context-research/
@@ -96,8 +99,10 @@ context-research/
   requirements.txt
   .env.example
   docs/
-    wp1-implementation-roadmap.md
-    wp1-progress-log.md
+    wp1/
+      wp1-implementation-roadmap.md
+      wp1-progress-log.md
+      wp1-task-backlog.md
     experiment-notes/
   src/
     context_research/
@@ -237,9 +242,9 @@ Required collectors for WP1:
 | ID | Purpose | Design | Output | Status | Notes |
 | :---- | :---- | :---- | :---- | :---- | :---- |
 | E0 | smoke and reproducibility | single model, short prompts, fixed seed | pass/fail + env manifest | complete | strict real-vLLM pass recorded in `run-20260212T050845Z-bdbc5aa3` |
-| E1 | baseline latency scaling | aggregated serving; prompt sweep (1K, 4K, 8K, 16K, 32K) | TTFT/TPOT curves | pending | depends on T7 latency collector finalization |
-| E2 | throughput and contention | batch/concurrency sweep at fixed prompt lengths | tokens/s, p95 latency, goodput | pending | depends on T7/T8 and concurrency harness |
-| E3 | aggregated vs disaggregated | same workload on both schedulers | delta TTFT/TPOT/goodput and transfer overhead | pending | depends on T9 + T13 comparison pipeline |
+| E1 | baseline latency scaling | aggregated serving; prompt sweep (1K, 4K, 8K, 16K, 32K) | TTFT/TPOT curves | pending | instrumentation/reporting prerequisites are complete; execution + plots pending |
+| E2 | throughput and contention | batch/concurrency sweep at fixed prompt lengths | tokens/s, p95 latency, goodput | pending | instrumentation/reporting prerequisites are complete; concurrency harness + runs pending |
+| E3 | aggregated vs disaggregated | same workload on both schedulers | delta TTFT/TPOT/goodput and transfer overhead | pending | transfer/stall instrumentation is complete; comparison harness + multi-GPU real runs pending |
 | E4 | capability subset | small LongBench + RULER/InfinityBench subset | quality under compute budget | pending | benchmark harness not implemented yet |
 | E5 | memory decomposition | profile peak memory across prompt lengths and modes | memory breakdown tables and plots | pending | GPU profiling collector pending |
 | E6 | extended-context stress | YaRN-enabled long-context subset (64K, 96K, 131K targets as feasible) | scaling behavior beyond native 32K | pending | requires stable E1/E2 and long-context resource tuning |
@@ -255,11 +260,11 @@ Notes:
 | Week | Milestone | Status |
 | :---- | :---- | :---- |
 | 1 | scaffold repo, config schema, backend abstraction, smoke run | complete |
-| 2 | aggregated serving runner + TTFT/TPOT instrumentation | in_progress |
-| 3 | profiling collectors + run metadata schema + report template | in_progress |
+| 2 | aggregated serving runner + TTFT/TPOT instrumentation | complete |
+| 3 | profiling collectors + run metadata schema + report template | complete |
 | 4 | E1/E2 completed on primary model; baseline dashboard draft | pending |
 | 5 | disaggregated scheduler and broker prototype | complete |
-| 6 | E3 run + KV transfer accounting; first comparison report | pending |
+| 6 | E3 run + KV transfer accounting; first comparison report | in_progress |
 | 7 | capability subset harness (E4) and memory decomposition (E5) | pending |
 | 8 | WP1 freeze: reproducibility pass and deliverable report | pending |
 
@@ -279,23 +284,23 @@ WP1 is complete when all conditions are met:
 | OOM at long prompts | blocks E1/E5 high-length runs | use smaller batch, quantization, reduced max length tier |
 | benchmark runtime too long | delayed iteration | fixed-size benchmark subsets for WP1 |
 | unstable latency noise | weak conclusions | warmup standardization + repeated trials + p50/p95 reporting |
+| single-GPU OOM in real disaggregated 8B mode | blocks E3 runs on single-device hosts | execute disaggregated real runs on multi-GPU, use explicit GPU assignment, keep single-GPU disaggregated in simulated mode |
 | disaggregated prototype complexity | schedule slip | stage as simple broker first, optimize in WP2 |
 
 ## 10. Decision Log (Locked for WP1)
 
 1. **Model:** `Qwen/Qwen3-8B` is the primary baseline model.
 2. **Serving backend:** `vLLM` only in WP1 for execution speed and lower integration risk.
-3. **Hardware profile:** single-GPU baseline (24GB minimum target), with current validation on Lightning L40S 46GB.
+3. **Hardware profile:** single-GPU baseline for aggregated runs, with multi-GPU planned for real disaggregated 8B runs.
 4. **Benchmark depth:** fixed-size subsets for LongBench/RULER/InfinityBench in WP1.
-5. **Disaggregation schedule:** implement disaggregated prototype in Month 2 after aggregated baselines are stable.
+5. **Disaggregation schedule:** disaggregated prototype is implemented; real 8B disaggregated experiments should run with multi-GPU placement.
 6. **Training strategy:** pretrained/frozen-base approach for WP1-WP2; no full-model pretraining.
 7. **Context policy:** run native 32K first, then YaRN stress subset up to 131K where feasible.
 8. **Thinking mode policy:** `enable_thinking=False` for primary systems benchmarks; optional separate analysis later.
 
-## 11. Near-Term Implications (Post E0)
+## 11. Near-Term Implications (Post T10)
 
-- T7 should build directly on per-request TTFT/TPOT fields already emitted in `e0_summary.json`; missing piece is multi-request aggregation (p50/p95).
-- T8 can start from existing hardware/environment manifest and add sampled GPU telemetry over run lifetime.
-- T9 should reuse broker `transfer_bytes` and `transfer_ms` events already produced by disaggregated runs and add stall-ratio logic.
-- T12 is partially complete (E0 path done); E1/E2 configs and runners are the next unlock for G2.
-- Keep strict real-backend mode as default for all systems baselines; simulated fallback should stay opt-in debug only.
+- `E1/E2` are now execution tasks rather than instrumentation tasks; collectors and report paths are already in place.
+- `E3` now has transfer/stall metrics and GPU assignment metadata available in run artifacts.
+- Multi-GPU disaggregated execution is now the operational default for real 8B comparisons; single-GPU disaggregated should remain simulated/debug.
+- `T11-T16` are the primary remaining blockers for WP1 completion (`G2` and `G3` closure depends on experiment execution and comparison harnesses).

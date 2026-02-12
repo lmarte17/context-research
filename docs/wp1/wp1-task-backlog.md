@@ -24,10 +24,10 @@ Scope: actionable tasks for first execution cycle
 
 | ID | Task | Acceptance Criteria | Estimate | Status | Completion Notes |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| T7 | TTFT/TPOT collector | per-request TTFT and TPOT captured with p50/p95 summary | 0.5 day | pending | per-request fields exist; aggregate collector still pending |
-| T8 | GPU stats collector | peak/avg memory and utilization logged per run | 0.5 day | pending | environment GPU snapshot exists; sampled collector still pending |
-| T9 | KV transfer collector (disaggregated path) | transfer bytes, time, and stall ratio reported | 1 day | pending | broker transfer bytes/time present; collector + stall ratio pending |
-| T10 | report generator | single markdown summary per run in `outputs/reports/` | 0.5 day | in_progress | E0 markdown report script implemented; generalized WP1 report pending |
+| T7 | TTFT/TPOT collector | per-request TTFT and TPOT captured with p50/p95 summary | 0.5 day | complete | `LatencyStatsCollector` emits per-request samples and p50/p95 summary in `profiling.latency` |
+| T8 | GPU stats collector | peak/avg memory and utilization logged per run | 0.5 day | complete | `GPUStatsCollector` adds sampled memory/utilization stats with run-level avg/peak summaries |
+| T9 | KV transfer collector (disaggregated path) | transfer bytes, time, and stall ratio reported | 1 day | complete | `KVTransferStatsCollector` reports transfer bytes/ms/throughput/stall ratio and ingests broker handoffs |
+| T10 | report generator | single markdown summary per run in `outputs/reports/` | 0.5 day | complete | generalized reporter (`context_research.profiling.reporter`) now powers `scripts/make_report.sh` |
 
 ## 4. Benchmarks and Experiments
 
@@ -45,8 +45,8 @@ Scope: actionable tasks for first execution cycle
 | Gate | Condition | Status | Notes |
 | :---- | :---- | :---- | :---- |
 | G1 | T1-T5 complete and E0 passes | complete | satisfied with strict real-vLLM E0 run (`run-20260212T050845Z-bdbc5aa3`) |
-| G2 | T7-T10 complete and E1/E2 plotted | pending | depends on collectors and E1/E2 experiment execution |
-| G3 | T6 + T9 + T13 complete and disaggregated delta report produced | in_progress | T6 complete; T9/T13 pending |
+| G2 | T7-T10 complete and E1/E2 plotted | pending | T7-T10 complete; pending E1/E2 execution and plot generation |
+| G3 | T6 + T9 + T13 complete and disaggregated delta report produced | in_progress | T6+T9 complete; real disaggregated 8B runs should use multi-GPU; T13 pending |
 | G4 | T11-T16 complete and WP1 baseline packet ready | pending | benchmark/evaluation tracks not started |
 
 ## 6. Deferred Until WP2 (Intentional)

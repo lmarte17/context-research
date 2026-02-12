@@ -5,12 +5,13 @@ Purpose: running record of completed work, concrete evidence, and what each mile
 
 ## Current Snapshot
 
-- Completed scope: `T1` through `T6`, plus `E0` smoke/reproducibility run.
-- Current milestone state: `G1` satisfied.
+- Completed scope: `T1` through `T10`, plus `E0` smoke/reproducibility run.
+- Current milestone state: `G1` satisfied; `G2` in progress (collectors/reporting complete, E1/E2 pending); `G3` in progress (T9 complete, T13 pending).
 - Latest strict E0 evidence run: `run-20260212T050845Z-bdbc5aa3`.
+- Latest profiling/reporting validation run: `run-20260212T215844Z-959e7b72`.
 - Execution hardware for the validated run: Lightning Studio `NVIDIA L40S` (46GB VRAM).
 
-## Completed Work (T1-T6 + E0)
+## Completed Work (T1-T10 + E0)
 
 ### T1: Project Scaffold and Basic CLI
 
@@ -58,6 +59,42 @@ Purpose: running record of completed work, concrete evidence, and what each mile
 - Wired E0 disaggregated path to execute separate prefill/decode backend instances.
 - Result: disaggregated baseline path now produces concrete transfer/accounting artifacts.
 
+### T7: TTFT/TPOT Collector
+
+- Implemented `LatencyStatsCollector` with per-request sample capture.
+- Added aggregate distribution reporting (`min`, `max`, `avg`, `p50`, `p95`) for TTFT/TPOT.
+- Wired collector outputs into E0 summary under `profiling.latency`.
+- Result: latency data is now directly usable for E1/E2 curves and p95-based comparisons.
+
+### T8: GPU Stats Collector
+
+- Implemented sampled GPU telemetry collector (`GPUStatsCollector`) using NVML when available.
+- Added per-run avg/peak summaries for memory used and utilization.
+- Added graceful unavailable-path reporting when NVML/GPU metrics are not available.
+- Wired collector outputs into E0 summary under `profiling.gpu`.
+- Result: E0 artifacts now include the memory/utilization primitives needed for E2/E5 system analysis.
+
+### T9: KV Transfer Collector
+
+- Implemented `KVTransferStatsCollector` for disaggregated transfer accounting.
+- Ingested broker completed handoffs and standardized transfer reporting (`bytes`, `ms`, throughput, stall ratio).
+- Added `broker_completed_handoffs` and `profiling.kv_transfer` blocks to E0 summaries.
+- Result: disaggregated runs now emit direct transfer-overhead metrics needed for E3/T13.
+
+### T10: Generalized Report Generator
+
+- Added generalized report module (`context_research.profiling.reporter`) and switched `scripts/make_report.sh` to use it.
+- Report now summarizes latency, GPU stats, KV transfer stats, checks, and run files from summary JSON.
+- Preserved compatibility with older summary payloads that predate profiling blocks.
+- Result: one-command run reporting is now reusable across current and upcoming WP1 experiments.
+
+### Disaggregated Multi-GPU Hardening (Post T9/T10)
+
+- Added automatic GPU discovery and prefill/decode assignment for disaggregated E0 runs.
+- Added assignment strategy reporting (`gpu_assignment`) to run summary and markdown reports.
+- Added optional manual serving-config overrides (`prefill_visible_devices`, `decode_visible_devices`).
+- Result: disaggregated real-vLLM runs can be explicitly and reproducibly mapped to multiple GPUs.
+
 ### E0: Smoke + Reproducibility
 
 - E0 now requires fixed `seed` in config.
@@ -74,17 +111,18 @@ Purpose: running record of completed work, concrete evidence, and what each mile
 
 ## Why This Matters for Remaining WP1 Work
 
-- `T7` (latency collector): base per-request fields already exist; remaining work is aggregate statistics across batches/runs (p50/p95).
-- `T8` (GPU collector): current manifest confirms GPU identity; remaining work is time-series sampling and per-run summary statistics.
-- `T9` (KV transfer collector): transfer bytes/time primitives already exist in broker/scheduler; remaining work is stall-ratio derivation and standardized reporting.
-- `T10` (reporting): E0 markdown report path exists; remaining work is generalized multi-experiment report assembly.
-- `T11-T16` (benchmarks/experiments): now unblocked by reliable strict-run execution and stable run metadata/output schema.
+- `E1/E2` are now unblocked on instrumentation/reporting: T7/T8/T10 provide the needed latency and GPU summary structure.
+- `E3/T13` now have transfer and stall-ratio primitives from T9, plus explicit disaggregated GPU assignment metadata.
+- Run artifacts now contain a stable profiling schema (`profiling.latency`, `profiling.gpu`, `profiling.kv_transfer`) for downstream comparison code.
+- Remaining WP1 blockers are now benchmark/experiment execution and comparison harness implementation (`T11-T16`).
 
 ## Operational Notes
 
 - `HF_HOME` must be a filesystem path, not a URL.
 - Simulated backend mode should remain debug-only (`CONTEXT_RESEARCH_ALLOW_SIMULATED_BACKEND=1`).
 - Different GPU SKUs (L40S vs A100) are acceptable for early WP1 execution, but final comparisons should annotate hardware in reports.
+- Real disaggregated 8B runs should use multi-GPU placement. On single 46GB GPUs, two real vLLM backends can OOM.
+- Single-GPU systems should use aggregated real runs and reserve disaggregated mode for simulated-path checks.
 
 ## Update Protocol
 
@@ -101,3 +139,7 @@ When adding new entries:
 - Closed `T1-T6`.
 - Converted E0 into strict real-backend pass/fail behavior and validated successful strict run.
 - Stabilized Lightning bootstrap path and documented environment fillers/metadata flow.
+- Closed `T7-T10` with profiling collectors + generalized report generation.
+- Added disaggregated transfer/stall reporting and standardized profiling sections in summary artifacts.
+- Added disaggregated multi-GPU assignment logic and surfaced assignment metadata in summaries/reports.
+- Validation runs: `run-20260212T211216Z-0e6ee513`, `run-20260212T211226Z-a7a7d4e8`, `run-20260212T215844Z-959e7b72`.
