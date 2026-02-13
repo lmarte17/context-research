@@ -552,6 +552,14 @@ def _build_vllm_backend_config(
     rope_scaling_raw = vllm_config.get("rope_scaling")
     if rope_scaling_raw is not None:
         rope_scaling = _as_mapping(rope_scaling_raw, "vllm.rope_scaling")
+        # Different model/runtime stacks expect either `type` or `rope_type`.
+        # Normalize to include both keys when either one is provided.
+        rope_type = _safe_optional_str(rope_scaling.get("rope_type"))
+        legacy_type = _safe_optional_str(rope_scaling.get("type"))
+        if rope_type and not legacy_type:
+            rope_scaling = {**rope_scaling, "type": rope_type}
+        elif legacy_type and not rope_type:
+            rope_scaling = {**rope_scaling, "rope_type": legacy_type}
         merged_hf_overrides = dict(hf_overrides or {})
         merged_hf_overrides["rope_scaling"] = rope_scaling
         hf_overrides = merged_hf_overrides
