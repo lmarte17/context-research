@@ -3,10 +3,8 @@ model: Qwen/Qwen3-8B
 seed: 42
 benchmark_config: configs/benchmarks/wp1_smoke.yaml
 target_prompt_lengths:
+  - 24270
   - 32768
-  - 65536
-  - 98304
-  - 131072
 trials_per_length: 1
 max_new_tokens: 32
 temperature: 0.0
