@@ -5,15 +5,16 @@ Purpose: running record of completed work, concrete evidence, and what each mile
 
 ## Current Snapshot
 
-- Completed scope: `T1` through `T12`, plus `E0`, `E1`, and `E2` execution paths.
-- Current milestone state: `G1` and `G2` satisfied; `G3` in progress (`T13` pending).
+- Completed scope: `T1` through `T16`, plus `E0` through `E6` execution paths.
+- Current milestone state: `G1` through `G4` satisfied.
 - Latest strict E0 evidence run: `run-20260212T050845Z-bdbc5aa3`.
 - Latest profiling/reporting validation run: `run-20260212T215844Z-959e7b72`.
 - Latest E1 run evidence: `run-20260213T034945Z-e4774230`.
 - Latest E2 run evidence: `run-20260213T034950Z-5e949638`.
+- Latest T11-T16 implementation validation runs: `run-test-e3-sim-v2`, `run-test-e4-sim`, `run-test-e5-sim-v2`, `run-test-e6-yarn-default`.
 - Execution hardware for the validated run: Lightning Studio `NVIDIA L40S` (46GB VRAM).
 
-## Completed Work (T1-T12 + E0/E1/E2)
+## Completed Work (T1-T16 + E0-E6)
 
 ### T1: Project Scaffold and Basic CLI
 
@@ -138,12 +139,66 @@ Purpose: running record of completed work, concrete evidence, and what each mile
   - `artifacts/e2_latency_curve.svg`
 - Validation run `run-20260213T034950Z-5e949638` produced successful summary + plots.
 
-## Why This Matters for Remaining WP1 Work
+### T11: Benchmark Harness + Deterministic Subset Loader
 
-- `G2` can now be treated as closed: T7-T10 are complete and E1/E2 produced plotted outputs.
-- `E3/T13` now have transfer and stall-ratio primitives from T9, plus explicit disaggregated GPU assignment metadata.
-- Run artifacts now contain a stable profiling schema plus E1/E2 sweep outputs and plot files for downstream comparison code.
-- Remaining WP1 blockers center on benchmark harness and comparison/evaluation tracks (`T11`, `T13-T16`).
+- Implemented benchmark harness with:
+  - deterministic seeded subset selection,
+  - per-task sample count/seed overrides,
+  - optional JSONL dataset inputs,
+  - built-in fallback tasks for `pg19_subset`, `longbench_subset`, `ruler_subset`, and `infinitybench_subset`.
+- Added benchmark core artifacts:
+  - `src/context_research/benchmarks/base.py`
+  - `src/context_research/benchmarks/harness.py`
+  - task modules in `src/context_research/benchmarks/`.
+- Result: E4/E6 can load fixed reproducible benchmark subsets from config without ad-hoc data wiring.
+
+### T13: E3 Aggregated vs Disaggregated Comparison
+
+- Added `run-e3` pipeline to execute side-by-side aggregated and disaggregated sweeps.
+- Added comparison outputs:
+  - `artifacts/e3_mode_comparison.csv`
+  - `artifacts/e3_latency_comparison.svg`
+  - `artifacts/e3_goodput_comparison.svg`
+- Extended summary/report schema with comparison rows and mode-specific run blocks.
+- Result: G3 acceptance criteria now has a first-class reproducible implementation path.
+
+### T14: E4 Capability Subset Evaluation
+
+- Added `run-e4` capability evaluation over LongBench/RULER/InfinityBench subsets.
+- Added quality scoring outputs (exact match, contains-reference, token F1, composite quality score).
+- Added artifacts:
+  - `artifacts/e4_quality_by_task.csv`
+  - `artifacts/e4_sample_scores.csv`
+  - `artifacts/e4_quality_by_task.svg`
+- Result: capability track is now automated and tied into the shared reporting pipeline.
+
+### T15: E5 Memory Decomposition
+
+- Added `run-e5` mode/prompt-length sweep for memory decomposition.
+- Added decomposition outputs:
+  - `artifacts/e5_memory_decomposition.csv`
+  - `artifacts/e5_memory_peak_curve.svg`
+- Added decomposition fields for estimated KV/non-KV memory and disaggregated transfer stall context.
+- Result: memory decomposition is now generated directly from run artifacts instead of manual post-processing.
+
+### T16: E6 YaRN Stress Subset
+
+- Added `run-e6` extended-context stress runner with target prompt-length sweeps to 131K (best effort).
+- Added E6 artifacts:
+  - `artifacts/e6_context_stress.csv`
+  - `artifacts/e6_length_summary.csv`
+  - `artifacts/e6_ttft_curve.svg`
+  - `artifacts/e6_tpot_curve.svg`
+- Added dedicated YaRN serving config: `configs/serving/aggregated_e6_yarn.yaml`.
+- Added rope scaling compatibility handling for both schema variants (`type` and `rope_type`) after Lightning host error feedback.
+- Result: E6 execution path is now operational with explicit long-context configuration support.
+
+## Why This Matters for WP2 Transition
+
+- `G3` and `G4` are now closed: benchmark harness plus E3-E6 comparison/evaluation tracks are implemented.
+- WP1 now has one-command experiment and reporting paths for all baseline tracks (`E0` through `E6`).
+- Remaining variance is primarily execution environment/hardware evidence quality, not missing pipeline implementation.
+- WP2 can proceed from stable interfaces and artifacts rather than unfinished WP1 plumbing.
 
 ## Operational Notes
 
@@ -152,7 +207,8 @@ Purpose: running record of completed work, concrete evidence, and what each mile
 - Different GPU SKUs (L40S vs A100) are acceptable for early WP1 execution, but final comparisons should annotate hardware in reports.
 - Real disaggregated 8B runs should use multi-GPU placement. On single 46GB GPUs, two real vLLM backends can OOM.
 - Single-GPU systems should use aggregated real runs and reserve disaggregated mode for simulated-path checks.
-- Current E1/E2 evidence runs were validated through simulated backend execution in this environment; rerun strict real-vLLM on Lightning for final baseline packet numbers.
+- `run-e6` defaults to a YaRN-enabled serving config (`configs/serving/aggregated_e6_yarn.yaml`) and includes rope schema compatibility for `type` and `rope_type`.
+- Current E1/E2 evidence runs were validated through simulated backend execution in this environment; rerun strict real-vLLM on Lightning for final publishable baseline figures where required.
 
 ## Update Protocol
 
@@ -175,3 +231,15 @@ When adding new entries:
 - Validation runs: `run-20260212T211216Z-0e6ee513`, `run-20260212T211226Z-a7a7d4e8`, `run-20260212T215844Z-959e7b72`.
 - Closed `T12` by implementing E1/E2 runners/configs and producing plotted artifacts.
 - Closed `G2` conditionally with E1/E2 plotted validation runs: `run-20260213T034945Z-e4774230`, `run-20260213T034950Z-5e949638`.
+
+### 2026-02-13
+
+- Closed `T11` by implementing deterministic benchmark harness + subset loader with built-in WP1 tasks and optional JSONL task inputs.
+- Closed `T13` by implementing `run-e3` aggregated/disaggregated comparison pipeline with delta CSV + plot artifacts.
+- Closed `T14` by implementing `run-e4` quality subset evaluation and per-task quality reporting artifacts.
+- Closed `T15` by implementing `run-e5` memory decomposition sweeps and prompt-length decomposition artifacts.
+- Closed `T16` by implementing `run-e6` YaRN stress workflow and long-context artifact outputs.
+- Added dedicated YaRN serving config (`configs/serving/aggregated_e6_yarn.yaml`) and rope schema compatibility handling (`type`/`rope_type`) after Lightning runtime feedback.
+- Extended CLI, experiment wrappers, and markdown reporting to support `E3` through `E6`.
+- Validation runs (implementation path): `run-test-e3-sim-v2`, `run-test-e4-sim`, `run-test-e5-sim-v2`, `run-test-e6-yarn-default`.
+- Closed `G3` and `G4`; WP1 implementation scope is now complete.

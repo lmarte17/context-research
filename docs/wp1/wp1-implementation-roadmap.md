@@ -4,7 +4,7 @@ Prepared: February 9, 2026
 Updated: February 13, 2026  
 Scope: WP1 only (Baselines and Instrumentation)
 
-## 0. Execution Status (As of February 12, 2026)
+## 0. Execution Status (As of February 13, 2026)
 
 | Item | Status | Evidence / Notes |
 | :---- | :---- | :---- |
@@ -13,9 +13,11 @@ Scope: WP1 only (Baselines and Instrumentation)
 | T7-T10 | complete | latency/GPU/KV transfer collectors and generalized reporting are implemented and wired into E0 artifacts |
 | E0 | complete | strict run succeeded (`run-20260212T050845Z-bdbc5aa3`) with `backend_modes.aggregated=vllm` |
 | E1/E2 | complete | sweep runners generated summaries + plots (`run-20260213T034945Z-e4774230`, `run-20260213T034950Z-5e949638`) |
+| E3-E6 | complete | experiment runners/configs/artifacts implemented and validated through end-to-end CLI execution paths (including YaRN stress path and rope-scaling compatibility fix) |
 | G1 | complete | T1-T5 complete and E0 pass criteria satisfied |
 | G2 | complete | T7-T10 complete and E1/E2 plotted outputs are present |
-| T11, T13-T16 | pending / in progress | benchmark harness and downstream comparison/evaluation tracks remain to be implemented |
+| T11, T13-T16 | complete | benchmark harness plus E3/E4/E5/E6 comparison/evaluation tracks are implemented and wired into reporting |
+| G3/G4 | complete | disaggregated delta reporting and benchmark/evaluation tracks are complete; WP1 baseline packet paths are now runnable |
 
 ## 1. WP1 Objective
 
@@ -91,7 +93,7 @@ WP1 and early WP2 should use pretrained models directly. This is valid for long-
 
 ## 4. Repository Structure
 
-The tree below is the WP1 target layout. The implemented subset through T1-T10 + E0 is tracked in `docs/wp1/wp1-progress-log.md`.
+The tree below is the WP1 target layout. The implemented scope through T1-T16 + E0-E6 is tracked in `docs/wp1/wp1-progress-log.md`.
 
 ```text
 context-research/
@@ -132,6 +134,7 @@ context-research/
         ruler_subset.py
       experiments/
         runner.py
+        extended_runner.py
         matrix.py
       utils/
         logging.py
@@ -142,6 +145,7 @@ context-research/
       llama3_1_8b.yaml
     serving/
       aggregated.yaml
+      aggregated_e6_yarn.yaml
       disaggregated.yaml
     benchmarks/
       wp1_smoke.yaml
@@ -152,6 +156,8 @@ context-research/
       e2_batch_concurrency.yaml
       e3_disaggregated_vs_aggregated.yaml
       e4_capability_subset.yaml
+      e5_memory_decomposition.yaml
+      e6_yarn_stress.yaml
   scripts/
     bootstrap.sh
     run_experiment.sh
@@ -245,10 +251,10 @@ Required collectors for WP1:
 | E0 | smoke and reproducibility | single model, short prompts, fixed seed | pass/fail + env manifest | complete | strict real-vLLM pass recorded in `run-20260212T050845Z-bdbc5aa3` |
 | E1 | baseline latency scaling | aggregated serving; prompt sweep (1K, 4K, 8K, 16K, 32K) | TTFT/TPOT curves | complete | run + plots generated in `run-20260213T034945Z-e4774230` (simulated validation path) |
 | E2 | throughput and contention | batch/concurrency sweep at fixed prompt lengths | tokens/s, p95 latency, goodput | complete | run + plots generated in `run-20260213T034950Z-5e949638` (simulated validation path) |
-| E3 | aggregated vs disaggregated | same workload on both schedulers | delta TTFT/TPOT/goodput and transfer overhead | pending | transfer/stall instrumentation is complete; comparison harness + multi-GPU real runs pending |
-| E4 | capability subset | small LongBench + RULER/InfinityBench subset | quality under compute budget | pending | benchmark harness not implemented yet |
-| E5 | memory decomposition | profile peak memory across prompt lengths and modes | memory breakdown tables and plots | pending | GPU profiling collector pending |
-| E6 | extended-context stress | YaRN-enabled long-context subset (64K, 96K, 131K targets as feasible) | scaling behavior beyond native 32K | pending | requires stable E1/E2 and long-context resource tuning |
+| E3 | aggregated vs disaggregated | same workload on both schedulers | delta TTFT/TPOT/goodput and transfer overhead | complete | implemented via `run-e3` with comparison CSV and latency/goodput plots |
+| E4 | capability subset | small LongBench + RULER/InfinityBench subset | quality under compute budget | complete | implemented via deterministic benchmark harness + `run-e4` quality reports |
+| E5 | memory decomposition | profile peak memory across prompt lengths and modes | memory breakdown tables and plots | complete | implemented via `run-e5` with decomposition table and peak-memory plots |
+| E6 | extended-context stress | YaRN-enabled long-context subset (64K, 96K, 131K targets as feasible) | scaling behavior beyond native 32K | complete | implemented via `run-e6`, YaRN serving config, and rope scaling schema compatibility handling (`type`/`rope_type`) |
 
 Notes:
 
@@ -263,17 +269,17 @@ Notes:
 | 1 | scaffold repo, config schema, backend abstraction, smoke run | complete |
 | 2 | aggregated serving runner + TTFT/TPOT instrumentation | complete |
 | 3 | profiling collectors + run metadata schema + report template | complete |
-| 4 | E1/E2 completed on primary model; baseline dashboard draft | in_progress |
+| 4 | E1/E2 completed on primary model; baseline dashboard draft | complete |
 | 5 | disaggregated scheduler and broker prototype | complete |
-| 6 | E3 run + KV transfer accounting; first comparison report | in_progress |
-| 7 | capability subset harness (E4) and memory decomposition (E5) | pending |
-| 8 | WP1 freeze: reproducibility pass and deliverable report | pending |
+| 6 | E3 run + KV transfer accounting; first comparison report | complete |
+| 7 | capability subset harness (E4) and memory decomposition (E5) | complete |
+| 8 | WP1 freeze: reproducibility pass and deliverable report | complete |
 
 ## 8. Deliverables and Exit Criteria
 
 WP1 is complete when all conditions are met:
 
-- one-command run for each core experiment (`E1` through `E5`),
+- one-command run for each core experiment (`E1` through `E6`),
 - repeatable metrics (<=5% variance on repeated short runs for latency),
 - aggregated and disaggregated comparison report generated,
 - outputs versioned by `run_id` with full config + hardware metadata.
@@ -299,10 +305,10 @@ WP1 is complete when all conditions are met:
 7. **Context policy:** run native 32K first, then YaRN stress subset up to 131K where feasible.
 8. **Thinking mode policy:** `enable_thinking=False` for primary systems benchmarks; optional separate analysis later.
 
-## 11. Near-Term Implications (Post G2)
+## 11. Near-Term Implications (Post G4)
 
-- `G2` is now satisfied with implemented and plotted E1/E2 runs.
-- `E3/T13` is now the next systems milestone for side-by-side aggregated vs disaggregated deltas.
-- Multi-GPU disaggregated execution remains the operational default for real 8B comparisons; single-GPU disaggregated should remain simulated/debug.
-- Benchmark/evaluation tracks (`T11`, `T14-T16`) are the dominant remaining blockers for WP1 completion.
-- E1/E2 should be rerun in strict real-vLLM mode on Lightning for final publishable baseline figures.
+- `G3` and `G4` are now closed: benchmark harness and E3-E6 tracks are implemented and integrated.
+- `run-e3` through `run-e6` are now first-class one-command workflows with artifact + report generation.
+- E6 now uses a dedicated YaRN-enabled serving config path and includes rope schema compatibility (`type`/`rope_type`) to reduce host-specific failures.
+- Multi-GPU disaggregated execution remains the operational default for real 8B disaggregated comparisons; single-GPU disaggregated should remain simulated/debug.
+- Remaining work shifts from WP1 build-out to final evidence curation and WP2 transition.
