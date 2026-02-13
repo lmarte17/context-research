@@ -334,6 +334,9 @@ class VLLMBackend(ServingBackend):
         first_token_time = _to_float(getattr(metrics, "first_token_time", None))
         last_token_time = _to_float(getattr(metrics, "last_token_time", None))
         finished_time = _to_float(getattr(metrics, "finished_time", None))
+        total_metrics_ms: float | None = None
+        if arrival_time is not None and finished_time is not None and finished_time >= arrival_time:
+            total_metrics_ms = (finished_time - arrival_time) * 1000.0
 
         ttft_ms: float | None = None
         tpot_ms: float | None = None
@@ -359,12 +362,27 @@ class VLLMBackend(ServingBackend):
         if ttft_ms is None:
             ttft_ms = elapsed_ms
 
-        if tpot_ms is None:
-            if completion_tokens <= 1:
-                tpot_ms = 0.0
-            else:
-                residual_ms = max(elapsed_ms - ttft_ms, 0.0)
+        if completion_tokens <= 1:
+            tpot_ms = 0.0
+        elif tpot_ms is None or tpot_ms <= 0.0:
+            residual_ms = max(elapsed_ms - ttft_ms, 0.0)
+            if residual_ms > 0.0:
                 tpot_ms = residual_ms / float(completion_tokens - 1)
+                if latency_source == "vllm_metrics":
+                    latency_source = "vllm_metrics+elapsed_residual_fallback"
+                else:
+                    latency_source = "elapsed_residual_fallback"
+            else:
+                reference_ms = (
+                    total_metrics_ms
+                    if total_metrics_ms is not None and total_metrics_ms > 0.0
+                    else max(elapsed_ms, 0.0)
+                )
+                tpot_ms = reference_ms / float(completion_tokens) if reference_ms > 0.0 else 0.0
+                if latency_source == "vllm_metrics":
+                    latency_source = "vllm_metrics+elapsed_average_fallback"
+                else:
+                    latency_source = "elapsed_average_fallback"
 
         return (ttft_ms, tpot_ms, latency_source)
 
