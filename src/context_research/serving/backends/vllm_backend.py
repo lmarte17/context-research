@@ -39,6 +39,7 @@ class VLLMBackendConfig:
     simulated_tpot_ms: float = 1.5
     visible_devices: str | None = None
     device: str | None = None
+    hf_overrides: dict[str, Any] | None = None
 
 
 class VLLMBackend(ServingBackend):
@@ -84,6 +85,8 @@ class VLLMBackend(ServingBackend):
                 kwargs["dtype"] = self._config.dtype
             if self._config.device is not None:
                 kwargs["device"] = self._config.device
+            if self._config.hf_overrides is not None:
+                kwargs["hf_overrides"] = self._config.hf_overrides
 
             init_params = set(inspect.signature(LLM.__init__).parameters.keys())
             init_params.discard("self")

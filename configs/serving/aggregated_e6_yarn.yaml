@@ -1,0 +1,21 @@
+mode: aggregated
+backend: vllm
+allow_simulated: false
+pool_name: aggregated
+pool_size: 1
+vllm:
+  tensor_parallel_size: 1
+  gpu_memory_utilization: 0.9
+  dtype: bfloat16
+  trust_remote_code: true
+  enforce_eager: true
+  enable_thinking: false
+
+  # YaRN rope scaling for E6 long-context stress runs.
+  # This keeps default WP1 aggregated config unchanged while allowing >40K targets in E6.
+  hf_overrides:
+    rope_scaling:
+      type: yarn
+      factor: 4.0
+      original_max_position_embeddings: 40960
+

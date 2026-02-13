@@ -543,6 +543,19 @@ def _build_vllm_backend_config(
     device: str | None = None,
 ) -> VLLMBackendConfig:
     vllm_config = _as_mapping(serving_config.get("vllm"), "vllm")
+    hf_overrides_raw = vllm_config.get("hf_overrides")
+    hf_overrides = (
+        _as_mapping(hf_overrides_raw, "vllm.hf_overrides")
+        if hf_overrides_raw is not None
+        else None
+    )
+    rope_scaling_raw = vllm_config.get("rope_scaling")
+    if rope_scaling_raw is not None:
+        rope_scaling = _as_mapping(rope_scaling_raw, "vllm.rope_scaling")
+        merged_hf_overrides = dict(hf_overrides or {})
+        merged_hf_overrides["rope_scaling"] = rope_scaling
+        hf_overrides = merged_hf_overrides
+
     return VLLMBackendConfig(
         model=model_name,
         tensor_parallel_size=_safe_int(vllm_config.get("tensor_parallel_size"), 1),
@@ -555,6 +568,7 @@ def _build_vllm_backend_config(
         simulate_if_unavailable=allow_simulated_backend,
         visible_devices=visible_devices,
         device=device,
+        hf_overrides=hf_overrides,
     )
 
 

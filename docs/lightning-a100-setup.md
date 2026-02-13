@@ -43,9 +43,17 @@ if [ -f .venv/bin/activate ]; then source .venv/bin/activate; fi
 ./scripts/run_experiment.sh e0 --serving-config configs/serving/disaggregated.yaml
 ./scripts/run_experiment.sh e1
 ./scripts/run_experiment.sh e2
+./scripts/run_experiment.sh e3
+./scripts/run_experiment.sh e4
+./scripts/run_experiment.sh e5
+./scripts/run_experiment.sh e6
 
 ./scripts/make_report.sh latest
 ```
+
+Notes:
+- `e6` now defaults to a YaRN-enabled serving config: `configs/serving/aggregated_e6_yarn.yaml`.
+- If your host cannot run long-context real-vLLM due memory limits, use simulated mode for harness validation: `CONTEXT_RESEARCH_ALLOW_SIMULATED_BACKEND=1`.
 
 ## 4. Strictness and Reproducibility Rules
 

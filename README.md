@@ -37,6 +37,8 @@ if [ -f .venv/bin/activate ]; then source .venv/bin/activate; fi
 ./scripts/make_report.sh latest
 ```
 
+Note: `e6` defaults to `configs/serving/aggregated_e6_yarn.yaml` so long-context runs can exceed native context limits when the model/runtime support YaRN rope scaling.
+
 ## Strict Backend Behavior
 
 Default behavior is strict:

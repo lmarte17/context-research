@@ -554,8 +554,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run_e6_parser.add_argument(
         "--serving-config",
-        default="configs/serving/aggregated.yaml",
-        help="Path to serving YAML config (aggregated).",
+        default="configs/serving/aggregated_e6_yarn.yaml",
+        help="Path to serving YAML config (aggregated; YaRN-enabled default for E6).",
     )
     run_e6_parser.add_argument(
         "--benchmark-config",
