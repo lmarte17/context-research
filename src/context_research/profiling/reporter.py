@@ -50,7 +50,7 @@ def build_run_markdown_report(payload: dict[str, Any], summary_path: str | Path)
     finished_at = payload.get("finished_at_utc")
     experiment_name = payload.get("experiment_name")
 
-    generation_result = payload.get("generation_result") or {}
+    generation_result = _as_dict(payload.get("generation_result"))
     prefill_result = payload.get("prefill_result") or {}
     checks = payload.get("checks") or {}
     backend_modes = payload.get("backend_modes") or {}
@@ -59,6 +59,7 @@ def build_run_markdown_report(payload: dict[str, Any], summary_path: str | Path)
     artifacts = _as_dict(payload.get("artifacts"))
     e1_points = _as_list_of_dicts(payload.get("latency_by_prompt_tokens"))
     e2_points = _as_list_of_dicts(payload.get("concurrency_results"))
+    last_request = _resolve_last_request(payload)
 
     latency_summary = _as_dict(_as_dict(profiling.get("latency")).get("summary"))
     ttft_summary = _as_dict(latency_summary.get("ttft_ms"))
@@ -100,9 +101,9 @@ def build_run_markdown_report(payload: dict[str, Any], summary_path: str | Path)
         f"- Request count: `{_fmt_int(_as_dict(profiling.get('latency')).get('sample_count'))}`",
         f"- TTFT p50/p95 (ms): `{_fmt_float(ttft_summary.get('p50'))}` / `{_fmt_float(ttft_summary.get('p95'))}`",
         f"- TPOT p50/p95 (ms): `{_fmt_float(tpot_summary.get('p50'))}` / `{_fmt_float(tpot_summary.get('p95'))}`",
-        f"- Last request TTFT/TPOT (ms): `{_fmt_float(generation_result.get('ttft_ms'))}` / `{_fmt_float(generation_result.get('tpot_ms'))}`",
-        f"- Prompt/completion tokens: `{_fmt_int(generation_result.get('prompt_tokens'))}` / `{_fmt_int(generation_result.get('completion_tokens'))}`",
-        f"- Latency source: `{_fmt_text(_as_dict(generation_result.get('metadata')).get('latency_source'))}`",
+        f"- Last request TTFT/TPOT (ms): `{_fmt_float(last_request.get('ttft_ms'))}` / `{_fmt_float(last_request.get('tpot_ms'))}`",
+        f"- Prompt/completion tokens: `{_fmt_int(last_request.get('prompt_tokens'))}` / `{_fmt_int(last_request.get('completion_tokens'))}`",
+        f"- Latency source: `{_fmt_text(last_request.get('latency_source'))}`",
     ]
 
     if e1_points:
@@ -234,6 +235,55 @@ def _as_list_of_dicts(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, dict)]
+
+
+def _resolve_last_request(payload: dict[str, Any]) -> dict[str, Any]:
+    generation_result = _as_dict(payload.get("generation_result"))
+    if generation_result:
+        return {
+            "ttft_ms": generation_result.get("ttft_ms"),
+            "tpot_ms": generation_result.get("tpot_ms"),
+            "prompt_tokens": generation_result.get("prompt_tokens"),
+            "completion_tokens": generation_result.get("completion_tokens"),
+            "latency_source": _as_dict(generation_result.get("metadata")).get("latency_source"),
+        }
+
+    latency_samples = _as_list_of_dicts(
+        _as_dict(_as_dict(payload.get("profiling")).get("latency")).get("samples")
+    )
+    if latency_samples:
+        sample = latency_samples[-1]
+        return {
+            "ttft_ms": sample.get("ttft_ms"),
+            "tpot_ms": sample.get("tpot_ms"),
+            "prompt_tokens": sample.get("prompt_tokens"),
+            "completion_tokens": sample.get("completion_tokens"),
+            "latency_source": _as_dict(sample.get("metadata")).get("latency_source"),
+        }
+
+    trial_records = _as_list_of_dicts(payload.get("trial_records"))
+    if trial_records:
+        trial = trial_records[-1]
+        return {
+            "ttft_ms": trial.get("ttft_ms"),
+            "tpot_ms": trial.get("tpot_ms"),
+            "prompt_tokens": trial.get("prompt_tokens_observed"),
+            "completion_tokens": trial.get("completion_tokens"),
+            "latency_source": trial.get("latency_source"),
+        }
+
+    request_records = _as_list_of_dicts(payload.get("request_records"))
+    if request_records:
+        request = request_records[-1]
+        return {
+            "ttft_ms": request.get("ttft_ms"),
+            "tpot_ms": request.get("tpot_ms"),
+            "prompt_tokens": request.get("prompt_tokens_observed"),
+            "completion_tokens": request.get("completion_tokens"),
+            "latency_source": None,
+        }
+
+    return {}
 
 
 def _fmt_int(value: Any) -> str:
