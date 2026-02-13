@@ -5,8 +5,8 @@ prompt_lengths:
   - 1024
   - 4096
   - 8192
-  - 16384
-  - 32768
+  # - 16384
+  # - 32768
 trials_per_length: 3
 max_new_tokens: 64
 temperature: 0.0
