@@ -138,6 +138,14 @@ class VLLMBackend(ServingBackend):
             return self._generate_vllm(request)
         return self._generate_simulated(request)
 
+    def generate_batch(self, requests: list[GenerationRequest]) -> list[GenerationResult]:
+        self._require_started()
+        if not requests:
+            return []
+        if self._mode == "vllm":
+            return self._generate_batch_vllm(requests)
+        return [self._generate_simulated(request) for request in requests]
+
     def _require_started(self) -> None:
         if not self._started:
             raise RuntimeError("Backend is not started. Call start() first.")
@@ -201,6 +209,62 @@ class VLLMBackend(ServingBackend):
                 "visible_devices": self._config.visible_devices,
             },
         )
+
+    def _generate_batch_vllm(self, requests: list[GenerationRequest]) -> list[GenerationResult]:
+        assert self._llm is not None
+        assert self._sampling_params_cls is not None
+
+        first = requests[0]
+        if not all(
+            request.max_new_tokens == first.max_new_tokens
+            and request.temperature == first.temperature
+            and request.top_p == first.top_p
+            and request.seed == first.seed
+            for request in requests
+        ):
+            return [self._generate_vllm(request) for request in requests]
+
+        sampling_params = self._build_sampling_params(first)
+        prompts = [request.prompt for request in requests]
+        started = perf_counter()
+        outputs = self._llm.generate(prompts, sampling_params=sampling_params)
+        elapsed_ms = (perf_counter() - started) * 1000.0
+        if len(outputs) != len(requests):
+            return [self._generate_vllm(request) for request in requests]
+
+        fallback_elapsed_ms = elapsed_ms / max(len(requests), 1)
+        results: list[GenerationResult] = []
+        for request, request_output in zip(requests, outputs):
+            first_output = request_output.outputs[0] if request_output.outputs else None
+            text = first_output.text if first_output is not None else ""
+
+            prompt_tokens = self._extract_prompt_tokens(request_output, request.prompt)
+            completion_tokens = self._extract_completion_tokens(text, first_output)
+            ttft_ms, tpot_ms, latency_source = self._extract_latency_metrics(
+                request_output=request_output,
+                elapsed_ms=fallback_elapsed_ms,
+                completion_tokens=completion_tokens,
+            )
+
+            results.append(
+                GenerationResult(
+                    text=text,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    ttft_ms=ttft_ms,
+                    tpot_ms=tpot_ms,
+                    metadata={
+                        "backend": "vllm",
+                        "mode": self._mode,
+                        "elapsed_ms": fallback_elapsed_ms,
+                        "latency_source": latency_source,
+                        "seed": request.seed,
+                        "visible_devices": self._config.visible_devices,
+                        "batch_size": len(requests),
+                    },
+                )
+            )
+        return results
 
     def _maybe_get_tokenizer(self) -> Any | None:
         if self._llm is None:

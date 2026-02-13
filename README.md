@@ -27,6 +27,8 @@ if [ -f .venv/bin/activate ]; then source .venv/bin/activate; fi
 
 ./scripts/run_experiment.sh e0
 ./scripts/run_experiment.sh e0 --serving-config configs/serving/disaggregated.yaml
+./scripts/run_experiment.sh e1
+./scripts/run_experiment.sh e2
 
 ./scripts/make_report.sh latest
 ```
@@ -49,7 +51,8 @@ export CONTEXT_RESEARCH_ALLOW_SIMULATED_BACKEND=1
 ## Artifact Outputs
 
 - Run metadata: `outputs/runs/<run_id>/run_metadata.json`
-- E0 summary: `outputs/runs/<run_id>/e0_summary.json`
+- Experiment summary: `outputs/runs/<run_id>/*_summary.json`
+- E1/E2 plots + CSVs: `outputs/runs/<run_id>/artifacts/`
 - Markdown report: `outputs/reports/<run_id>.md`
 
 ## Fillers (Env Vars / Lightning URLs Only)
@@ -63,7 +66,7 @@ All fillers are env vars. No non-env placeholders are required.
 | `CONTEXT_RESEARCH_REQUIREMENTS_FILE` | alternate requirements file for bootstrap | `scripts/bootstrap.sh` |
 | `CONTEXT_RESEARCH_EXTRA_REQUIREMENTS` | extra pip requirements for host-specific overrides | `scripts/bootstrap.sh` |
 | `CONTEXT_RESEARCH_USE_EXISTING_ENV` | force bootstrap to skip `.venv` creation | `scripts/bootstrap.sh` |
-| `CONTEXT_RESEARCH_ALLOW_SIMULATED_BACKEND` | opt-in simulated fallback for E0 CLI wrapper | `scripts/run_experiment.sh` |
+| `CONTEXT_RESEARCH_ALLOW_SIMULATED_BACKEND` | opt-in simulated fallback for E0/E1/E2 CLI wrappers | `scripts/run_experiment.sh` |
 | `LIGHTNING_STUDIO_URL` | Lightning studio URL (for run traceability) | `src/context_research/experiments/runner.py` (`environment_manifest.lightning_env`) |
 | `LIGHTNING_RUN_URL` | Lightning run/job URL | `src/context_research/experiments/runner.py` (`environment_manifest.lightning_env`) |
 | `LIGHTNING_WORKSPACE_URL` | Lightning workspace URL | `src/context_research/experiments/runner.py` (`environment_manifest.lightning_env`) |

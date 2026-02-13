@@ -1,0 +1,15 @@
+name: e1_aggregated_latency
+model: Qwen/Qwen3-8B
+seed: 42
+prompt_lengths:
+  - 1024
+  - 4096
+  - 8192
+  - 16384
+  - 32768
+trials_per_length: 3
+max_new_tokens: 64
+temperature: 0.0
+top_p: 1.0
+notes:
+  purpose: "aggregated latency scaling sweep for TTFT/TPOT curves"

@@ -5,13 +5,15 @@ Purpose: running record of completed work, concrete evidence, and what each mile
 
 ## Current Snapshot
 
-- Completed scope: `T1` through `T10`, plus `E0` smoke/reproducibility run.
-- Current milestone state: `G1` satisfied; `G2` in progress (collectors/reporting complete, E1/E2 pending); `G3` in progress (T9 complete, T13 pending).
+- Completed scope: `T1` through `T12`, plus `E0`, `E1`, and `E2` execution paths.
+- Current milestone state: `G1` and `G2` satisfied; `G3` in progress (`T13` pending).
 - Latest strict E0 evidence run: `run-20260212T050845Z-bdbc5aa3`.
 - Latest profiling/reporting validation run: `run-20260212T215844Z-959e7b72`.
+- Latest E1 run evidence: `run-20260213T034945Z-e4774230`.
+- Latest E2 run evidence: `run-20260213T034950Z-5e949638`.
 - Execution hardware for the validated run: Lightning Studio `NVIDIA L40S` (46GB VRAM).
 
-## Completed Work (T1-T10 + E0)
+## Completed Work (T1-T12 + E0/E1/E2)
 
 ### T1: Project Scaffold and Basic CLI
 
@@ -109,12 +111,39 @@ Purpose: running record of completed work, concrete evidence, and what each mile
   - `strict_backend=true`,
   - `all_backends_real_vllm=true`.
 
+### T12: E0/E1/E2 Runner + Config Coverage
+
+- Added `run-e1` and `run-e2` CLI commands and script wrappers in `scripts/run_experiment.sh`.
+- Added experiment configs:
+  - `configs/experiments/e1_aggregated_latency.yaml`
+  - `configs/experiments/e2_batch_concurrency.yaml`
+- Extended report generation to include E1/E2 sweep tables and artifact references.
+- Result: E0/E1/E2 can now be executed end-to-end with run metadata, summaries, plots, and markdown reports.
+
+### E1: Aggregated Latency Sweep
+
+- Implemented prompt-length sweep execution with per-length TTFT/TPOT distributions.
+- Added generated artifacts:
+  - `artifacts/e1_latency_curve.csv`
+  - `artifacts/e1_ttft_curve.svg`
+  - `artifacts/e1_tpot_curve.svg`
+- Validation run `run-20260213T034945Z-e4774230` produced successful summary + plots.
+
+### E2: Batch/Concurrency Sweep
+
+- Implemented concurrency-level sweep with throughput, p95 latency, and SLO goodput reporting.
+- Added generated artifacts:
+  - `artifacts/e2_concurrency_curve.csv`
+  - `artifacts/e2_throughput_curve.svg`
+  - `artifacts/e2_latency_curve.svg`
+- Validation run `run-20260213T034950Z-5e949638` produced successful summary + plots.
+
 ## Why This Matters for Remaining WP1 Work
 
-- `E1/E2` are now unblocked on instrumentation/reporting: T7/T8/T10 provide the needed latency and GPU summary structure.
+- `G2` can now be treated as closed: T7-T10 are complete and E1/E2 produced plotted outputs.
 - `E3/T13` now have transfer and stall-ratio primitives from T9, plus explicit disaggregated GPU assignment metadata.
-- Run artifacts now contain a stable profiling schema (`profiling.latency`, `profiling.gpu`, `profiling.kv_transfer`) for downstream comparison code.
-- Remaining WP1 blockers are now benchmark/experiment execution and comparison harness implementation (`T11-T16`).
+- Run artifacts now contain a stable profiling schema plus E1/E2 sweep outputs and plot files for downstream comparison code.
+- Remaining WP1 blockers center on benchmark harness and comparison/evaluation tracks (`T11`, `T13-T16`).
 
 ## Operational Notes
 
@@ -123,6 +152,7 @@ Purpose: running record of completed work, concrete evidence, and what each mile
 - Different GPU SKUs (L40S vs A100) are acceptable for early WP1 execution, but final comparisons should annotate hardware in reports.
 - Real disaggregated 8B runs should use multi-GPU placement. On single 46GB GPUs, two real vLLM backends can OOM.
 - Single-GPU systems should use aggregated real runs and reserve disaggregated mode for simulated-path checks.
+- Current E1/E2 evidence runs were validated through simulated backend execution in this environment; rerun strict real-vLLM on Lightning for final baseline packet numbers.
 
 ## Update Protocol
 
@@ -143,3 +173,5 @@ When adding new entries:
 - Added disaggregated transfer/stall reporting and standardized profiling sections in summary artifacts.
 - Added disaggregated multi-GPU assignment logic and surfaced assignment metadata in summaries/reports.
 - Validation runs: `run-20260212T211216Z-0e6ee513`, `run-20260212T211226Z-a7a7d4e8`, `run-20260212T215844Z-959e7b72`.
+- Closed `T12` by implementing E1/E2 runners/configs and producing plotted artifacts.
+- Closed `G2` conditionally with E1/E2 plotted validation runs: `run-20260213T034945Z-e4774230`, `run-20260213T034950Z-5e949638`.

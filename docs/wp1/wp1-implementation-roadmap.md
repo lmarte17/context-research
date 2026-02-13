@@ -1,7 +1,7 @@
 # WP1 Implementation Roadmap (Budget-Constrained 7B-8B Track)
 
 Prepared: February 9, 2026  
-Updated: February 12, 2026  
+Updated: February 13, 2026  
 Scope: WP1 only (Baselines and Instrumentation)
 
 ## 0. Execution Status (As of February 12, 2026)
@@ -12,9 +12,10 @@ Scope: WP1 only (Baselines and Instrumentation)
 | T4-T6 | complete | strict real-vLLM backend, aggregated scheduler, and disaggregated scheduler + broker are implemented |
 | T7-T10 | complete | latency/GPU/KV transfer collectors and generalized reporting are implemented and wired into E0 artifacts |
 | E0 | complete | strict run succeeded (`run-20260212T050845Z-bdbc5aa3`) with `backend_modes.aggregated=vllm` |
+| E1/E2 | complete | sweep runners generated summaries + plots (`run-20260213T034945Z-e4774230`, `run-20260213T034950Z-5e949638`) |
 | G1 | complete | T1-T5 complete and E0 pass criteria satisfied |
-| G2 | in progress | collector/report prerequisites satisfied; pending E1/E2 execution and plot generation |
-| T11-T16 | pending / in progress | benchmark harness and downstream experiment tracks remain to be implemented |
+| G2 | complete | T7-T10 complete and E1/E2 plotted outputs are present |
+| T11, T13-T16 | pending / in progress | benchmark harness and downstream comparison/evaluation tracks remain to be implemented |
 
 ## 1. WP1 Objective
 
@@ -242,8 +243,8 @@ Required collectors for WP1:
 | ID | Purpose | Design | Output | Status | Notes |
 | :---- | :---- | :---- | :---- | :---- | :---- |
 | E0 | smoke and reproducibility | single model, short prompts, fixed seed | pass/fail + env manifest | complete | strict real-vLLM pass recorded in `run-20260212T050845Z-bdbc5aa3` |
-| E1 | baseline latency scaling | aggregated serving; prompt sweep (1K, 4K, 8K, 16K, 32K) | TTFT/TPOT curves | pending | instrumentation/reporting prerequisites are complete; execution + plots pending |
-| E2 | throughput and contention | batch/concurrency sweep at fixed prompt lengths | tokens/s, p95 latency, goodput | pending | instrumentation/reporting prerequisites are complete; concurrency harness + runs pending |
+| E1 | baseline latency scaling | aggregated serving; prompt sweep (1K, 4K, 8K, 16K, 32K) | TTFT/TPOT curves | complete | run + plots generated in `run-20260213T034945Z-e4774230` (simulated validation path) |
+| E2 | throughput and contention | batch/concurrency sweep at fixed prompt lengths | tokens/s, p95 latency, goodput | complete | run + plots generated in `run-20260213T034950Z-5e949638` (simulated validation path) |
 | E3 | aggregated vs disaggregated | same workload on both schedulers | delta TTFT/TPOT/goodput and transfer overhead | pending | transfer/stall instrumentation is complete; comparison harness + multi-GPU real runs pending |
 | E4 | capability subset | small LongBench + RULER/InfinityBench subset | quality under compute budget | pending | benchmark harness not implemented yet |
 | E5 | memory decomposition | profile peak memory across prompt lengths and modes | memory breakdown tables and plots | pending | GPU profiling collector pending |
@@ -262,7 +263,7 @@ Notes:
 | 1 | scaffold repo, config schema, backend abstraction, smoke run | complete |
 | 2 | aggregated serving runner + TTFT/TPOT instrumentation | complete |
 | 3 | profiling collectors + run metadata schema + report template | complete |
-| 4 | E1/E2 completed on primary model; baseline dashboard draft | pending |
+| 4 | E1/E2 completed on primary model; baseline dashboard draft | in_progress |
 | 5 | disaggregated scheduler and broker prototype | complete |
 | 6 | E3 run + KV transfer accounting; first comparison report | in_progress |
 | 7 | capability subset harness (E4) and memory decomposition (E5) | pending |
@@ -298,9 +299,10 @@ WP1 is complete when all conditions are met:
 7. **Context policy:** run native 32K first, then YaRN stress subset up to 131K where feasible.
 8. **Thinking mode policy:** `enable_thinking=False` for primary systems benchmarks; optional separate analysis later.
 
-## 11. Near-Term Implications (Post T10)
+## 11. Near-Term Implications (Post G2)
 
-- `E1/E2` are now execution tasks rather than instrumentation tasks; collectors and report paths are already in place.
-- `E3` now has transfer/stall metrics and GPU assignment metadata available in run artifacts.
-- Multi-GPU disaggregated execution is now the operational default for real 8B comparisons; single-GPU disaggregated should remain simulated/debug.
-- `T11-T16` are the primary remaining blockers for WP1 completion (`G2` and `G3` closure depends on experiment execution and comparison harnesses).
+- `G2` is now satisfied with implemented and plotted E1/E2 runs.
+- `E3/T13` is now the next systems milestone for side-by-side aggregated vs disaggregated deltas.
+- Multi-GPU disaggregated execution remains the operational default for real 8B comparisons; single-GPU disaggregated should remain simulated/debug.
+- Benchmark/evaluation tracks (`T11`, `T14-T16`) are the dominant remaining blockers for WP1 completion.
+- E1/E2 should be rerun in strict real-vLLM mode on Lightning for final publishable baseline figures.

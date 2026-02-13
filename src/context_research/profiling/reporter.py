@@ -56,6 +56,9 @@ def build_run_markdown_report(payload: dict[str, Any], summary_path: str | Path)
     backend_modes = payload.get("backend_modes") or {}
     profiling = payload.get("profiling") or {}
     gpu_assignment = _as_dict(payload.get("gpu_assignment"))
+    artifacts = _as_dict(payload.get("artifacts"))
+    e1_points = _as_list_of_dicts(payload.get("latency_by_prompt_tokens"))
+    e2_points = _as_list_of_dicts(payload.get("concurrency_results"))
 
     latency_summary = _as_dict(_as_dict(profiling.get("latency")).get("summary"))
     ttft_summary = _as_dict(latency_summary.get("ttft_ms"))
@@ -87,7 +90,7 @@ def build_run_markdown_report(payload: dict[str, Any], summary_path: str | Path)
         "",
         f"- Strategy: `{_fmt_text(gpu_assignment.get('strategy'))}`",
         f"- Tensor parallel size: `{_fmt_int(gpu_assignment.get('tensor_parallel_size'))}`",
-        f"- Available GPUs: `{gpu_assignment.get('available_gpu_indices')}`",
+        f"- Available GPUs: `{_fmt_list(gpu_assignment.get('available_gpu_indices'))}`",
         f"- Prefill visible devices: `{_fmt_text(gpu_assignment.get('prefill_visible_devices'))}`",
         f"- Decode visible devices: `{_fmt_text(gpu_assignment.get('decode_visible_devices'))}`",
         f"- Warning: `{_fmt_text(gpu_assignment.get('warning'))}`",
@@ -99,7 +102,73 @@ def build_run_markdown_report(payload: dict[str, Any], summary_path: str | Path)
         f"- TPOT p50/p95 (ms): `{_fmt_float(tpot_summary.get('p50'))}` / `{_fmt_float(tpot_summary.get('p95'))}`",
         f"- Last request TTFT/TPOT (ms): `{_fmt_float(generation_result.get('ttft_ms'))}` / `{_fmt_float(generation_result.get('tpot_ms'))}`",
         f"- Prompt/completion tokens: `{_fmt_int(generation_result.get('prompt_tokens'))}` / `{_fmt_int(generation_result.get('completion_tokens'))}`",
-        f"- Latency source: `{_as_dict(generation_result.get('metadata')).get('latency_source')}`",
+        f"- Latency source: `{_fmt_text(_as_dict(generation_result.get('metadata')).get('latency_source'))}`",
+    ]
+
+    if e1_points:
+        lines.extend(
+            [
+                "",
+                "## E1 Sweep",
+                "",
+                "| Prompt Tokens | Trials | TTFT p50 (ms) | TTFT p95 (ms) | TPOT p50 (ms) | TPOT p95 (ms) |",
+                "| :---- | :---- | :---- | :---- | :---- | :---- |",
+            ]
+        )
+        for point in e1_points:
+            ttft = _as_dict(point.get("ttft_ms"))
+            tpot = _as_dict(point.get("tpot_ms"))
+            lines.append(
+                "| "
+                f"{_fmt_int(point.get('prompt_tokens'))} | "
+                f"{_fmt_int(point.get('trial_count'))} | "
+                f"{_fmt_float(ttft.get('p50'))} | "
+                f"{_fmt_float(ttft.get('p95'))} | "
+                f"{_fmt_float(tpot.get('p50'))} | "
+                f"{_fmt_float(tpot.get('p95'))} |"
+            )
+        lines.extend(
+            [
+                "",
+                f"- E1 CSV: `{_fmt_text(artifacts.get('e1_latency_curve_csv'))}`",
+                f"- E1 TTFT plot: `{_fmt_text(artifacts.get('e1_ttft_curve_svg'))}`",
+                f"- E1 TPOT plot: `{_fmt_text(artifacts.get('e1_tpot_curve_svg'))}`",
+            ]
+        )
+
+    if e2_points:
+        lines.extend(
+            [
+                "",
+                "## E2 Sweep",
+                "",
+                "| Concurrency | Requests | Throughput (tok/s) | Goodput (req/s) | TTFT p95 (ms) | TPOT p95 (ms) |",
+                "| :---- | :---- | :---- | :---- | :---- | :---- |",
+            ]
+        )
+        for point in e2_points:
+            ttft = _as_dict(point.get("ttft_ms"))
+            tpot = _as_dict(point.get("tpot_ms"))
+            lines.append(
+                "| "
+                f"{_fmt_int(point.get('concurrency'))} | "
+                f"{_fmt_int(point.get('request_count'))} | "
+                f"{_fmt_float(point.get('throughput_tokens_per_s'))} | "
+                f"{_fmt_float(point.get('goodput_rps'))} | "
+                f"{_fmt_float(ttft.get('p95'))} | "
+                f"{_fmt_float(tpot.get('p95'))} |"
+            )
+        lines.extend(
+            [
+                "",
+                f"- E2 CSV: `{_fmt_text(artifacts.get('e2_concurrency_curve_csv'))}`",
+                f"- E2 throughput plot: `{_fmt_text(artifacts.get('e2_throughput_curve_svg'))}`",
+                f"- E2 latency plot: `{_fmt_text(artifacts.get('e2_latency_curve_svg'))}`",
+            ]
+        )
+
+    lines.extend(
+        [
         "",
         "## Prefill",
         "",
@@ -131,7 +200,8 @@ def build_run_markdown_report(payload: dict[str, Any], summary_path: str | Path)
         "",
         f"- Summary JSON: `{summary_file}`",
         f"- Metadata JSON: `{metadata_file.resolve()}`",
-    ]
+        ]
+    )
     return "\n".join(lines) + "\n"
 
 
@@ -160,6 +230,12 @@ def _as_dict(value: Any) -> dict[str, Any]:
     return {}
 
 
+def _as_list_of_dicts(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
+
 def _fmt_int(value: Any) -> str:
     if isinstance(value, bool):
         return str(int(value))
@@ -185,6 +261,12 @@ def _fmt_bool(value: Any) -> str:
 def _fmt_text(value: Any) -> str:
     if isinstance(value, str) and value.strip():
         return value.strip()
+    return "n/a"
+
+
+def _fmt_list(value: Any) -> str:
+    if isinstance(value, list):
+        return str(value)
     return "n/a"
 
 

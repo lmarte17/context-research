@@ -41,6 +41,8 @@ if [ -f .venv/bin/activate ]; then source .venv/bin/activate; fi
 
 ./scripts/run_experiment.sh e0
 ./scripts/run_experiment.sh e0 --serving-config configs/serving/disaggregated.yaml
+./scripts/run_experiment.sh e1
+./scripts/run_experiment.sh e2
 
 ./scripts/make_report.sh latest
 ```
