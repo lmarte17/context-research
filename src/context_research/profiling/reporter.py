@@ -50,7 +50,6 @@ def build_run_markdown_report(payload: dict[str, Any], summary_path: str | Path)
     finished_at = payload.get("finished_at_utc")
     experiment_name = payload.get("experiment_name")
 
-    generation_result = _as_dict(payload.get("generation_result"))
     prefill_result = payload.get("prefill_result") or {}
     checks = payload.get("checks") or {}
     backend_modes = payload.get("backend_modes") or {}
@@ -59,7 +58,17 @@ def build_run_markdown_report(payload: dict[str, Any], summary_path: str | Path)
     artifacts = _as_dict(payload.get("artifacts"))
     e1_points = _as_list_of_dicts(payload.get("latency_by_prompt_tokens"))
     e2_points = _as_list_of_dicts(payload.get("concurrency_results"))
+    e3_points = _as_list_of_dicts(payload.get("comparison_rows"))
+    e4_points = _as_list_of_dicts(payload.get("quality_by_task"))
+    e4_overall = _as_dict(payload.get("quality_overall"))
+    e5_points = _as_list_of_dicts(payload.get("memory_rows"))
+    e6_points = _as_list_of_dicts(payload.get("length_summaries"))
+    mode_runs = _as_dict(payload.get("mode_runs"))
     last_request = _resolve_last_request(payload)
+
+    if not gpu_assignment:
+        disaggregated_mode = _as_dict(mode_runs.get("disaggregated"))
+        gpu_assignment = _as_dict(disaggregated_mode.get("gpu_assignment"))
 
     latency_summary = _as_dict(_as_dict(profiling.get("latency")).get("summary"))
     ttft_summary = _as_dict(latency_summary.get("ttft_ms"))
@@ -165,6 +174,137 @@ def build_run_markdown_report(payload: dict[str, Any], summary_path: str | Path)
                 f"- E2 CSV: `{_fmt_text(artifacts.get('e2_concurrency_curve_csv'))}`",
                 f"- E2 throughput plot: `{_fmt_text(artifacts.get('e2_throughput_curve_svg'))}`",
                 f"- E2 latency plot: `{_fmt_text(artifacts.get('e2_latency_curve_svg'))}`",
+            ]
+        )
+
+    if e3_points:
+        lines.extend(
+            [
+                "",
+                "## E3 Comparison",
+                "",
+                "| Concurrency | Agg TTFT p95 | Disagg TTFT p95 | Delta TTFT p95 | Agg TPOT p95 | Disagg TPOT p95 | Delta TPOT p95 | Agg Goodput | Disagg Goodput | Delta Goodput |",
+                "| :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- |",
+            ]
+        )
+        for point in e3_points:
+            lines.append(
+                "| "
+                f"{_fmt_int(point.get('concurrency'))} | "
+                f"{_fmt_float(point.get('aggregated_ttft_p95_ms'))} | "
+                f"{_fmt_float(point.get('disaggregated_ttft_p95_ms'))} | "
+                f"{_fmt_float(point.get('delta_ttft_p95_ms'))} | "
+                f"{_fmt_float(point.get('aggregated_tpot_p95_ms'))} | "
+                f"{_fmt_float(point.get('disaggregated_tpot_p95_ms'))} | "
+                f"{_fmt_float(point.get('delta_tpot_p95_ms'))} | "
+                f"{_fmt_float(point.get('aggregated_goodput_rps'))} | "
+                f"{_fmt_float(point.get('disaggregated_goodput_rps'))} | "
+                f"{_fmt_float(point.get('delta_goodput_rps'))} |"
+            )
+        lines.extend(
+            [
+                "",
+                f"- E3 CSV: `{_fmt_text(artifacts.get('e3_mode_comparison_csv'))}`",
+                f"- E3 latency plot: `{_fmt_text(artifacts.get('e3_latency_comparison_svg'))}`",
+                f"- E3 goodput plot: `{_fmt_text(artifacts.get('e3_goodput_comparison_svg'))}`",
+            ]
+        )
+
+    if e4_points:
+        lines.extend(
+            [
+                "",
+                "## E4 Quality",
+                "",
+                "| Task | Samples | Exact Match | Contains Ref | Token F1 | Quality Score | TTFT p95 | TPOT p95 |",
+                "| :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- |",
+            ]
+        )
+        for point in e4_points:
+            ttft = _as_dict(point.get("ttft_ms"))
+            tpot = _as_dict(point.get("tpot_ms"))
+            lines.append(
+                "| "
+                f"{_fmt_text(point.get('task'))} | "
+                f"{_fmt_int(point.get('sample_count'))} | "
+                f"{_fmt_float(point.get('exact_match_rate'))} | "
+                f"{_fmt_float(point.get('contains_reference_rate'))} | "
+                f"{_fmt_float(point.get('token_f1_avg'))} | "
+                f"{_fmt_float(point.get('quality_score_avg'))} | "
+                f"{_fmt_float(ttft.get('p95'))} | "
+                f"{_fmt_float(tpot.get('p95'))} |"
+            )
+        lines.extend(
+            [
+                "",
+                f"- Overall quality score: `{_fmt_float(e4_overall.get('quality_score_avg'))}`",
+                f"- E4 task CSV: `{_fmt_text(artifacts.get('e4_quality_by_task_csv'))}`",
+                f"- E4 sample CSV: `{_fmt_text(artifacts.get('e4_sample_scores_csv'))}`",
+                f"- E4 plot: `{_fmt_text(artifacts.get('e4_quality_by_task_svg'))}`",
+            ]
+        )
+
+    if e5_points:
+        lines.extend(
+            [
+                "",
+                "## E5 Memory",
+                "",
+                "| Mode | Prompt Tokens | Peak MB | Est KV MB | Est Non-KV MB | KV Stall Ratio | TTFT p95 | TPOT p95 | Success |",
+                "| :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- |",
+            ]
+        )
+        for point in e5_points:
+            lines.append(
+                "| "
+                f"{_fmt_text(point.get('mode'))} | "
+                f"{_fmt_int(point.get('prompt_tokens_target'))} | "
+                f"{_fmt_float(point.get('memory_used_mb_peak'))} | "
+                f"{_fmt_float(point.get('estimated_kv_cache_mb'))} | "
+                f"{_fmt_float(point.get('estimated_non_kv_mb'))} | "
+                f"{_fmt_float(point.get('kv_stall_ratio'))} | "
+                f"{_fmt_float(point.get('ttft_p95_ms'))} | "
+                f"{_fmt_float(point.get('tpot_p95_ms'))} | "
+                f"{_fmt_bool(point.get('case_success'))} |"
+            )
+        lines.extend(
+            [
+                "",
+                f"- E5 CSV: `{_fmt_text(artifacts.get('e5_memory_decomposition_csv'))}`",
+                f"- E5 plot: `{_fmt_text(artifacts.get('e5_memory_peak_curve_svg'))}`",
+            ]
+        )
+
+    if e6_points:
+        lines.extend(
+            [
+                "",
+                "## E6 Stress",
+                "",
+                "| Target Prompt Tokens | Attempts | Successes | Failures | TTFT p95 | TPOT p95 | Quality Score |",
+                "| :---- | :---- | :---- | :---- | :---- | :---- | :---- |",
+            ]
+        )
+        for point in e6_points:
+            ttft = _as_dict(point.get("ttft_ms"))
+            tpot = _as_dict(point.get("tpot_ms"))
+            lines.append(
+                "| "
+                f"{_fmt_int(point.get('target_prompt_tokens'))} | "
+                f"{_fmt_int(point.get('attempt_count'))} | "
+                f"{_fmt_int(point.get('success_count'))} | "
+                f"{_fmt_int(point.get('failure_count'))} | "
+                f"{_fmt_float(ttft.get('p95'))} | "
+                f"{_fmt_float(tpot.get('p95'))} | "
+                f"{_fmt_float(point.get('quality_score_avg'))} |"
+            )
+        lines.extend(
+            [
+                "",
+                f"- E6 request CSV: `{_fmt_text(artifacts.get('e6_context_stress_csv'))}`",
+                f"- E6 summary CSV: `{_fmt_text(artifacts.get('e6_length_summary_csv'))}`",
+                f"- E6 TTFT plot: `{_fmt_text(artifacts.get('e6_ttft_curve_svg'))}`",
+                f"- E6 TPOT plot: `{_fmt_text(artifacts.get('e6_tpot_curve_svg'))}`",
             ]
         )
 
@@ -282,6 +422,32 @@ def _resolve_last_request(payload: dict[str, Any]) -> dict[str, Any]:
             "completion_tokens": request.get("completion_tokens"),
             "latency_source": None,
         }
+
+    mode_runs = _as_dict(payload.get("mode_runs"))
+    if mode_runs:
+        disaggregated = _as_dict(mode_runs.get("disaggregated"))
+        disagg_request_records = _as_list_of_dicts(disaggregated.get("request_records"))
+        if disagg_request_records:
+            request = disagg_request_records[-1]
+            return {
+                "ttft_ms": request.get("ttft_ms"),
+                "tpot_ms": request.get("tpot_ms"),
+                "prompt_tokens": request.get("prompt_tokens_observed"),
+                "completion_tokens": request.get("completion_tokens"),
+                "latency_source": None,
+            }
+
+        aggregated = _as_dict(mode_runs.get("aggregated"))
+        agg_request_records = _as_list_of_dicts(aggregated.get("request_records"))
+        if agg_request_records:
+            request = agg_request_records[-1]
+            return {
+                "ttft_ms": request.get("ttft_ms"),
+                "tpot_ms": request.get("tpot_ms"),
+                "prompt_tokens": request.get("prompt_tokens_observed"),
+                "completion_tokens": request.get("completion_tokens"),
+                "latency_source": None,
+            }
 
     return {}
 

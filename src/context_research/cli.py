@@ -7,6 +7,7 @@ import sys
 
 from context_research.config.schema import create_run_metadata, write_run_metadata
 from context_research.experiments.runner import run_e0, run_e1, run_e2
+from context_research.experiments.extended_runner import run_e3, run_e4, run_e5, run_e6
 
 
 def _parse_notes(notes_json: str | None) -> dict[str, object]:
@@ -114,6 +115,118 @@ def cmd_run_e2(args: argparse.Namespace) -> int:
         warmup=not args.no_warmup,
         strict_backend=not args.allow_simulated_backend,
         allow_simulated_backend=args.allow_simulated_backend,
+    )
+    print(
+        json.dumps(
+            {
+                "run_id": result.run_id,
+                "run_dir": result.run_dir,
+                "metadata_path": result.metadata_path,
+                "summary_path": result.summary_path,
+                "mode": result.mode,
+                "success": result.success,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
+    return 0 if result.success else 2
+
+
+def cmd_run_e3(args: argparse.Namespace) -> int:
+    result = run_e3(
+        experiment_config_path=args.experiment_config,
+        output_root=args.output_root,
+        run_id=args.run_id,
+        warmup=not args.no_warmup,
+        strict_backend=not args.allow_simulated_backend,
+        allow_simulated_backend=args.allow_simulated_backend,
+        aggregated_serving_config_path=args.aggregated_serving_config,
+        disaggregated_serving_config_path=args.disaggregated_serving_config,
+    )
+    print(
+        json.dumps(
+            {
+                "run_id": result.run_id,
+                "run_dir": result.run_dir,
+                "metadata_path": result.metadata_path,
+                "summary_path": result.summary_path,
+                "mode": result.mode,
+                "success": result.success,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
+    return 0 if result.success else 2
+
+
+def cmd_run_e4(args: argparse.Namespace) -> int:
+    result = run_e4(
+        experiment_config_path=args.experiment_config,
+        serving_config_path=args.serving_config,
+        output_root=args.output_root,
+        run_id=args.run_id,
+        warmup=not args.no_warmup,
+        strict_backend=not args.allow_simulated_backend,
+        allow_simulated_backend=args.allow_simulated_backend,
+        benchmark_config_path=args.benchmark_config,
+    )
+    print(
+        json.dumps(
+            {
+                "run_id": result.run_id,
+                "run_dir": result.run_dir,
+                "metadata_path": result.metadata_path,
+                "summary_path": result.summary_path,
+                "mode": result.mode,
+                "success": result.success,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
+    return 0 if result.success else 2
+
+
+def cmd_run_e5(args: argparse.Namespace) -> int:
+    result = run_e5(
+        experiment_config_path=args.experiment_config,
+        output_root=args.output_root,
+        run_id=args.run_id,
+        warmup=not args.no_warmup,
+        strict_backend=not args.allow_simulated_backend,
+        allow_simulated_backend=args.allow_simulated_backend,
+        aggregated_serving_config_path=args.aggregated_serving_config,
+        disaggregated_serving_config_path=args.disaggregated_serving_config,
+    )
+    print(
+        json.dumps(
+            {
+                "run_id": result.run_id,
+                "run_dir": result.run_dir,
+                "metadata_path": result.metadata_path,
+                "summary_path": result.summary_path,
+                "mode": result.mode,
+                "success": result.success,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
+    return 0 if result.success else 2
+
+
+def cmd_run_e6(args: argparse.Namespace) -> int:
+    result = run_e6(
+        experiment_config_path=args.experiment_config,
+        serving_config_path=args.serving_config,
+        output_root=args.output_root,
+        run_id=args.run_id,
+        warmup=not args.no_warmup,
+        strict_backend=not args.allow_simulated_backend,
+        allow_simulated_backend=args.allow_simulated_backend,
+        benchmark_config_path=args.benchmark_config,
     )
     print(
         json.dumps(
@@ -297,6 +410,182 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     run_e2_parser.set_defaults(func=cmd_run_e2)
+
+    run_e3_parser = subparsers.add_parser(
+        "run-e3",
+        help="Execute E3 aggregated vs disaggregated comparison and write run artifacts.",
+    )
+    run_e3_parser.add_argument(
+        "--experiment-config",
+        default="configs/experiments/e3_disaggregated_vs_aggregated.yaml",
+        help="Path to E3 experiment YAML config.",
+    )
+    run_e3_parser.add_argument(
+        "--aggregated-serving-config",
+        default=None,
+        help="Optional override for aggregated serving YAML config.",
+    )
+    run_e3_parser.add_argument(
+        "--disaggregated-serving-config",
+        default=None,
+        help="Optional override for disaggregated serving YAML config.",
+    )
+    run_e3_parser.add_argument(
+        "--output-root",
+        default="outputs/runs",
+        help="Directory where outputs/runs/<run_id>/ artifacts will be written.",
+    )
+    run_e3_parser.add_argument(
+        "--run-id",
+        default=None,
+        help="Optional explicit run_id; autogenerated when omitted.",
+    )
+    run_e3_parser.add_argument(
+        "--no-warmup",
+        action="store_true",
+        help="Skip backend warmup request before the comparison sweeps.",
+    )
+    run_e3_parser.add_argument(
+        "--allow-simulated-backend",
+        action="store_true",
+        help=(
+            "Allow simulated fallback when vLLM is unavailable. "
+            "Default behavior is strict real-backend execution."
+        ),
+    )
+    run_e3_parser.set_defaults(func=cmd_run_e3)
+
+    run_e4_parser = subparsers.add_parser(
+        "run-e4",
+        help="Execute E4 capability subset evaluation and write run artifacts.",
+    )
+    run_e4_parser.add_argument(
+        "--experiment-config",
+        default="configs/experiments/e4_capability_subset.yaml",
+        help="Path to E4 experiment YAML config.",
+    )
+    run_e4_parser.add_argument(
+        "--serving-config",
+        default="configs/serving/aggregated.yaml",
+        help="Path to serving YAML config (aggregated).",
+    )
+    run_e4_parser.add_argument(
+        "--benchmark-config",
+        default=None,
+        help="Optional override for benchmark suite YAML config.",
+    )
+    run_e4_parser.add_argument(
+        "--output-root",
+        default="outputs/runs",
+        help="Directory where outputs/runs/<run_id>/ artifacts will be written.",
+    )
+    run_e4_parser.add_argument(
+        "--run-id",
+        default=None,
+        help="Optional explicit run_id; autogenerated when omitted.",
+    )
+    run_e4_parser.add_argument(
+        "--no-warmup",
+        action="store_true",
+        help="Skip backend warmup request before evaluation.",
+    )
+    run_e4_parser.add_argument(
+        "--allow-simulated-backend",
+        action="store_true",
+        help=(
+            "Allow simulated fallback when vLLM is unavailable. "
+            "Default behavior is strict real-backend execution."
+        ),
+    )
+    run_e4_parser.set_defaults(func=cmd_run_e4)
+
+    run_e5_parser = subparsers.add_parser(
+        "run-e5",
+        help="Execute E5 memory decomposition sweep and write run artifacts.",
+    )
+    run_e5_parser.add_argument(
+        "--experiment-config",
+        default="configs/experiments/e5_memory_decomposition.yaml",
+        help="Path to E5 experiment YAML config.",
+    )
+    run_e5_parser.add_argument(
+        "--aggregated-serving-config",
+        default=None,
+        help="Optional override for aggregated serving YAML config.",
+    )
+    run_e5_parser.add_argument(
+        "--disaggregated-serving-config",
+        default=None,
+        help="Optional override for disaggregated serving YAML config.",
+    )
+    run_e5_parser.add_argument(
+        "--output-root",
+        default="outputs/runs",
+        help="Directory where outputs/runs/<run_id>/ artifacts will be written.",
+    )
+    run_e5_parser.add_argument(
+        "--run-id",
+        default=None,
+        help="Optional explicit run_id; autogenerated when omitted.",
+    )
+    run_e5_parser.add_argument(
+        "--no-warmup",
+        action="store_true",
+        help="Skip backend warmup request before each memory case.",
+    )
+    run_e5_parser.add_argument(
+        "--allow-simulated-backend",
+        action="store_true",
+        help=(
+            "Allow simulated fallback when vLLM is unavailable. "
+            "Default behavior is strict real-backend execution."
+        ),
+    )
+    run_e5_parser.set_defaults(func=cmd_run_e5)
+
+    run_e6_parser = subparsers.add_parser(
+        "run-e6",
+        help="Execute E6 YaRN stress subset evaluation and write run artifacts.",
+    )
+    run_e6_parser.add_argument(
+        "--experiment-config",
+        default="configs/experiments/e6_yarn_stress.yaml",
+        help="Path to E6 experiment YAML config.",
+    )
+    run_e6_parser.add_argument(
+        "--serving-config",
+        default="configs/serving/aggregated.yaml",
+        help="Path to serving YAML config (aggregated).",
+    )
+    run_e6_parser.add_argument(
+        "--benchmark-config",
+        default=None,
+        help="Optional override for benchmark suite YAML config.",
+    )
+    run_e6_parser.add_argument(
+        "--output-root",
+        default="outputs/runs",
+        help="Directory where outputs/runs/<run_id>/ artifacts will be written.",
+    )
+    run_e6_parser.add_argument(
+        "--run-id",
+        default=None,
+        help="Optional explicit run_id; autogenerated when omitted.",
+    )
+    run_e6_parser.add_argument(
+        "--no-warmup",
+        action="store_true",
+        help="Skip backend warmup request before each target length.",
+    )
+    run_e6_parser.add_argument(
+        "--allow-simulated-backend",
+        action="store_true",
+        help=(
+            "Allow simulated fallback when vLLM is unavailable. "
+            "Default behavior is strict real-backend execution."
+        ),
+    )
+    run_e6_parser.set_defaults(func=cmd_run_e6)
 
     return parser
 

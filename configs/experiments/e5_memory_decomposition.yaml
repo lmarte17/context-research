@@ -1,0 +1,20 @@
+name: e5_memory_decomposition
+model: Qwen/Qwen3-8B
+seed: 42
+modes:
+  - aggregated
+  - disaggregated
+prompt_lengths:
+  - 1024
+  - 4096
+  - 8192
+trials_per_length: 2
+max_new_tokens: 64
+temperature: 0.0
+top_p: 1.0
+bytes_per_token_estimate: 2048
+aggregated_serving_config: configs/serving/aggregated.yaml
+disaggregated_serving_config: configs/serving/disaggregated.yaml
+notes:
+  purpose: "memory decomposition sweep by prompt length and mode"
+

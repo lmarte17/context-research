@@ -1,0 +1,19 @@
+name: e3_disaggregated_vs_aggregated
+model: Qwen/Qwen3-8B
+seed: 42
+prompt_tokens: 4096
+concurrency_levels:
+  - 1
+  - 2
+  - 4
+waves_per_level: 2
+max_new_tokens: 64
+temperature: 0.0
+top_p: 1.0
+ttft_slo_ms: 4000.0
+tpot_slo_ms: 120.0
+aggregated_serving_config: configs/serving/aggregated.yaml
+disaggregated_serving_config: configs/serving/disaggregated.yaml
+notes:
+  purpose: "side-by-side aggregated vs disaggregated comparison with delta table"
+

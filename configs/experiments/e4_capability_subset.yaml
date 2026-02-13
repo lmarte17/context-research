@@ -1,0 +1,10 @@
+name: e4_capability_subset
+model: Qwen/Qwen3-8B
+seed: 42
+benchmark_config: configs/benchmarks/wp1_core.yaml
+max_new_tokens: 64
+temperature: 0.0
+top_p: 1.0
+notes:
+  purpose: "quality subset evaluation for LongBench + RULER + InfinityBench tasks"
+

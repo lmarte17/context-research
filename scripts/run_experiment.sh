@@ -61,8 +61,76 @@ case "${EXPERIMENT}" in
         python -m context_research.cli run-e2 "${EXTRA_ARGS[@]}"
     fi
     ;;
+  e3)
+    ALLOW_SIMULATED="${CONTEXT_RESEARCH_ALLOW_SIMULATED_BACKEND:-0}"
+    EXTRA_ARGS=()
+    if [[ $# -gt 0 ]]; then
+      EXTRA_ARGS=("$@")
+    fi
+    if [[ "${ALLOW_SIMULATED}" == "1" || "${ALLOW_SIMULATED}" == "true" ]]; then
+      EXTRA_ARGS+=("--allow-simulated-backend")
+    fi
+    if [[ ${#EXTRA_ARGS[@]} -eq 0 ]]; then
+      PYTHONPATH="${ROOT_DIR}/src:${PYTHONPATH:-}" \
+        python -m context_research.cli run-e3
+    else
+      PYTHONPATH="${ROOT_DIR}/src:${PYTHONPATH:-}" \
+        python -m context_research.cli run-e3 "${EXTRA_ARGS[@]}"
+    fi
+    ;;
+  e4)
+    ALLOW_SIMULATED="${CONTEXT_RESEARCH_ALLOW_SIMULATED_BACKEND:-0}"
+    EXTRA_ARGS=()
+    if [[ $# -gt 0 ]]; then
+      EXTRA_ARGS=("$@")
+    fi
+    if [[ "${ALLOW_SIMULATED}" == "1" || "${ALLOW_SIMULATED}" == "true" ]]; then
+      EXTRA_ARGS+=("--allow-simulated-backend")
+    fi
+    if [[ ${#EXTRA_ARGS[@]} -eq 0 ]]; then
+      PYTHONPATH="${ROOT_DIR}/src:${PYTHONPATH:-}" \
+        python -m context_research.cli run-e4
+    else
+      PYTHONPATH="${ROOT_DIR}/src:${PYTHONPATH:-}" \
+        python -m context_research.cli run-e4 "${EXTRA_ARGS[@]}"
+    fi
+    ;;
+  e5)
+    ALLOW_SIMULATED="${CONTEXT_RESEARCH_ALLOW_SIMULATED_BACKEND:-0}"
+    EXTRA_ARGS=()
+    if [[ $# -gt 0 ]]; then
+      EXTRA_ARGS=("$@")
+    fi
+    if [[ "${ALLOW_SIMULATED}" == "1" || "${ALLOW_SIMULATED}" == "true" ]]; then
+      EXTRA_ARGS+=("--allow-simulated-backend")
+    fi
+    if [[ ${#EXTRA_ARGS[@]} -eq 0 ]]; then
+      PYTHONPATH="${ROOT_DIR}/src:${PYTHONPATH:-}" \
+        python -m context_research.cli run-e5
+    else
+      PYTHONPATH="${ROOT_DIR}/src:${PYTHONPATH:-}" \
+        python -m context_research.cli run-e5 "${EXTRA_ARGS[@]}"
+    fi
+    ;;
+  e6)
+    ALLOW_SIMULATED="${CONTEXT_RESEARCH_ALLOW_SIMULATED_BACKEND:-0}"
+    EXTRA_ARGS=()
+    if [[ $# -gt 0 ]]; then
+      EXTRA_ARGS=("$@")
+    fi
+    if [[ "${ALLOW_SIMULATED}" == "1" || "${ALLOW_SIMULATED}" == "true" ]]; then
+      EXTRA_ARGS+=("--allow-simulated-backend")
+    fi
+    if [[ ${#EXTRA_ARGS[@]} -eq 0 ]]; then
+      PYTHONPATH="${ROOT_DIR}/src:${PYTHONPATH:-}" \
+        python -m context_research.cli run-e6
+    else
+      PYTHONPATH="${ROOT_DIR}/src:${PYTHONPATH:-}" \
+        python -m context_research.cli run-e6 "${EXTRA_ARGS[@]}"
+    fi
+    ;;
   *)
-    echo "Unsupported experiment '${EXPERIMENT}'. Currently supported: e0, e1, e2" >&2
+    echo "Unsupported experiment '${EXPERIMENT}'. Currently supported: e0, e1, e2, e3, e4, e5, e6" >&2
     exit 2
     ;;
 esac
